@@ -33,7 +33,12 @@
   const weaponScreen = $('weapon-screen');
   const settingsScreen = $('settings-screen');
   const archiveScreen = $('archive-screen');
+  const talentScreen = $('talent-screen');
   const weaponListEl = $('weapon-list');
+  const touchUi = $('touch-ui');
+  const joyBase = $('joy-base');
+  const joyKnob = $('joy-knob');
+  const touchDash = $('touch-dash');
 
   /* ---------------- 常量 ---------------- */
   const MODES = {
@@ -53,6 +58,9 @@
   };
 
   const BOSS_NAMES = ['吞噬者', '夜母之影', '深渊守望', '黎明吞噬者'];
+
+  const AFFIX_COLORS = { frenzy: '#ff6b6b', shield: '#8ce8ff', split: '#b48cff' };
+  const AFFIX_NAMES = { frenzy: '狂暴', shield: '护盾', split: '分裂' };
 
   /* ---------------- 武器 ---------------- */
   const WEAPON_ICONS = {
@@ -113,7 +121,15 @@
     { id: 'level_15', name: '深渊行者', desc: '单场达到 15 级' }
   ];
 
-  const DEFAULT_META = { runs: 0, wins: 0, kills: 0, bestTime: 0, history: [], ach: {} };
+  /* ---------------- 余烬天赋 ---------------- */
+  const TALENTS = [
+    { id: 'power', name: '余烬之力', desc: '所有伤害 +3% / 级', max: 5, baseCost: 8, step: 6 },
+    { id: 'vitality', name: '不灭之躯', desc: '生命上限 +6 / 级', max: 5, baseCost: 8, step: 6 },
+    { id: 'swift', name: '夜行者', desc: '移动速度 +2% / 级', max: 5, baseCost: 10, step: 8 },
+    { id: 'magnet', name: '拾荒者', desc: '拾取范围 +6% / 级', max: 5, baseCost: 6, step: 5 }
+  ];
+
+  const DEFAULT_META = { runs: 0, wins: 0, kills: 0, bestTime: 0, history: [], ach: {}, embers: 0, talents: {} };
   let meta = loadMeta();
 
   function loadMeta() {
@@ -122,6 +138,8 @@
     m = Object.assign({}, DEFAULT_META, m || {});
     if (!Array.isArray(m.history)) m.history = [];
     if (!m.ach || typeof m.ach !== 'object') m.ach = {};
+    if (!m.talents || typeof m.talents !== 'object') m.talents = {};
+    if (!isFinite(m.embers)) m.embers = 0;
     return m;
   }
   function saveMeta() {
@@ -153,7 +171,8 @@
 
   const input = {
     keys: Object.create(null),
-    dashQueued: false
+    dashQueued: false,
+    joy: { x: 0, y: 0, active: false }
   };
 
   /* ---------------- 小工具 ---------------- */
@@ -198,10 +217,12 @@
     buildPatterns();
     buildMenuScene();
     bindInput();
+    setupTouchControls();
     bindSettings();
     applySettings();
     renderWeaponList();
     renderArchive();
+    renderTalentScreen();
     syncMuteIcon();
     updateBestDisplay();
     requestAnimationFrame(loop);
@@ -320,10 +341,12 @@
      ========================================================= */
   function makePlayer(weaponKey) {
     const w = WEAPONS[weaponKey] || WEAPONS.pistol;
-    return {
+    const tl = id => (meta.talents && meta.talents[id]) || 0;
+    const bonusHp = tl('vitality') * 6;
+    const p = {
       x: 0, y: 0, vx: 0, vy: 0, r: 15,
-      hp: w.maxHp, maxHp: w.maxHp,
-      baseSpeed: w.speed, speedMult: 1,
+      hp: w.maxHp + bonusHp, maxHp: w.maxHp + bonusHp,
+      baseSpeed: w.speed, speedMult: 1 + tl('swift') * 0.02,
       baseInterval: w.interval, fireRateMult: 1,
       baseDamage: w.damage, damageMult: 1,
       pierce: w.pierce, projectiles: w.projectiles, spread: w.spread,
@@ -347,6 +370,9 @@
       hurtFlash: 0,
       hasTarget: false
     };
+    p.damageMult *= 1 + tl('power') * 0.03;
+    p.pickupMult *= 1 + tl('magnet') * 0.06;
+    return p;
   }
 
   function makeGame(modeKey, weaponKey) {
@@ -390,7 +416,7 @@
       grid: new Map(),
       camera: { x: 0, y: 0 },
       decor: generateDecorations(20261019 + Math.floor(Math.random() * 9999)),
-      stats: { shots: 0, hits: 0 },
+      stats: { shots: 0, hits: 0, damageTaken: 0, dashes: 0, maxCombo: 0, healing: 0, picks: [] },
       bossKills: 0,
       bossWarn: null,
       heartbeatT: 0,
@@ -426,6 +452,7 @@
     hideAllScreens();
     hudEl.classList.remove('hidden');
     bossBar.classList.add('hidden');
+    bossBar.classList.remove('enraged');
     bossWarning.classList.remove('show');
     fxLowhp.classList.remove('on');
     document.body.classList.remove('debug');
@@ -433,6 +460,7 @@
 
     const wEl = $('hud-weapon');
     if (wEl) wEl.textContent = game.weaponName;
+    if (touchUi && document.body.classList.contains('touch')) touchUi.classList.remove('hidden');
 
     game.player.x = 0;
     game.player.y = 0;
@@ -444,7 +472,7 @@
   }
 
   function hideAllScreens() {
-    [startScreen, levelupScreen, pauseScreen, endScreen, weaponScreen, settingsScreen, archiveScreen]
+    [startScreen, levelupScreen, pauseScreen, endScreen, weaponScreen, settingsScreen, archiveScreen, talentScreen]
       .forEach(s => { if (s) s.classList.add('hidden'); });
   }
 
@@ -455,12 +483,16 @@
     startScreen.classList.remove('hidden');
     hudEl.classList.add('hidden');
     bossBar.classList.add('hidden');
+    bossBar.classList.remove('enraged');
     pauseScreen.classList.add('hidden');
     endScreen.classList.add('hidden');
     bossWarning.classList.remove('show');
     fxLowhp.classList.remove('on');
+    if (touchUi) touchUi.classList.add('hidden');
+    resetJoy();
     updateBestDisplay();
     renderArchive();
+    renderTalentScreen();
     menuT = 0;
   }
 
@@ -495,11 +527,35 @@
     $('end-damage').textContent = fmtNum(game.damageDealt);
     endScreen.classList.toggle('win', win);
 
+    // 本局详细数据
+    const st = game.stats;
+    const acc = st.shots > 0 ? Math.min(100, Math.round(st.hits / st.shots * 100)) : 0;
+    $('end-acc').textContent = acc + '%';
+    $('end-taken').textContent = fmtNum(st.damageTaken);
+    $('end-combo').textContent = st.maxCombo;
+    $('end-dash').textContent = st.dashes;
+
+    const build = $('end-build');
+    if (build) {
+      const owned = Object.keys(p.upgrades)
+        .filter(id => p.upgrades[id] > 0 && Upgrades.BY_ID[id])
+        .map(id => ({ id, lv: p.upgrades[id], def: Upgrades.BY_ID[id] }))
+        .sort((a, b) => b.lv - a.lv)
+        .slice(0, 8);
+      build.innerHTML = owned.length
+        ? '<span class="eb-label">本局构筑</span>' + owned.map(o =>
+            '<span class="eb-chip">' + o.def.name + '<b>' + o.lv + '</b></span>').join('')
+        : '<span class="eb-label">本局构筑</span><span class="eb-chip">未获得强化</span>';
+    }
+
     const isNew = saveBest(win, survived);
     $('end-new').style.display = isNew ? 'block' : 'none';
     fxLowhp.classList.remove('on');
     bossWarning.classList.remove('show');
-    recordRun(win, survived);
+    if (touchUi) touchUi.classList.add('hidden');
+    resetJoy();
+    const earned = recordRun(win, survived);
+    $('end-embers').textContent = '+' + earned;
     endScreen.classList.remove('hidden');
   }
 
@@ -547,7 +603,15 @@
     return true;
   }
 
+  function emberReward(win, survived) {
+    const modeKey = game.modeKey;
+    const mult = modeKey === 'nightmare' ? 1.5 : modeKey === 'quick' ? 0.85 : 1;
+    const base = Math.floor(game.kills / 50) + game.bossKills * 3 + Math.floor(survived / 60) + (win ? 10 : 0);
+    return Math.max(1, Math.round(base * mult));
+  }
+
   function recordRun(win, survived) {
+    const earned = emberReward(win, survived);
     const run = {
       at: Date.now(),
       mode: game.modeKey,
@@ -555,10 +619,12 @@
       win: !!win,
       time: Math.round(survived),
       kills: game.kills,
-      level: game.level
+      level: game.level,
+      embers: earned
     };
     meta.runs += 1;
     meta.kills += game.kills;
+    meta.embers = (meta.embers || 0) + earned;
     if (win) meta.wins += 1;
     if (run.time > meta.bestTime) meta.bestTime = run.time;
     meta.history.unshift(run);
@@ -571,6 +637,8 @@
     if (game.bossKills > 0) unlockAch('boss_slayer', true);
     if (meta.kills >= 500) unlockAch('kill_500', true);
     renderArchive();
+    renderTalentScreen();
+    return earned;
   }
 
   function renderArchive() {
@@ -590,6 +658,76 @@
         '<div><div class="ach-name">' + a.name + '</div>' +
         '<div class="ach-desc">' + a.desc + '</div></div></div>';
     }).join('');
+  }
+
+  /* =========================================================
+     余烬天赋
+     ========================================================= */
+  function talentCost(t, lv) {
+    return t.baseCost + lv * t.step;
+  }
+
+  function renderTalentScreen() {
+    const countEl = $('ember-count');
+    if (countEl) countEl.textContent = meta.embers || 0;
+    const menuEl = $('menu-embers');
+    if (menuEl) menuEl.textContent = meta.embers || 0;
+    const list = $('talent-list');
+    if (!list) return;
+
+    list.innerHTML = TALENTS.map(t => {
+      const lv = meta.talents[t.id] || 0;
+      const maxed = lv >= t.max;
+      const cost = talentCost(t, lv);
+      const pips = Array.from({ length: t.max }, (_, i) => '<i class="' + (i < lv ? 'on' : '') + '"></i>').join('');
+      return '<button class="talent-card' + (maxed ? ' maxed' : '') + '" data-talent="' + t.id + '">' +
+        '<div class="talent-head"><span class="talent-name">' + t.name + '</span>' +
+        '<span class="talent-lv">LV ' + lv + ' / ' + t.max + '</span></div>' +
+        '<div class="talent-desc">' + t.desc + '</div>' +
+        '<div class="talent-pips">' + pips + '</div>' +
+        '<div class="talent-buy"><span>' + (maxed ? '已满级' : '升级') + '</span>' +
+        '<span class="talent-cost">' + (maxed ? '—' : cost + ' 余烬') + '</span></div>' +
+        '</button>';
+    }).join('');
+
+    list.querySelectorAll('.talent-card').forEach(card => {
+      card.addEventListener('click', () => buyTalent(card.dataset.talent, card));
+    });
+  }
+
+  function buyTalent(id, card) {
+    const t = TALENTS.find(x => x.id === id);
+    if (!t) return;
+    const lv = meta.talents[id] || 0;
+    if (lv >= t.max) return;
+    const cost = talentCost(t, lv);
+    if ((meta.embers || 0) < cost) {
+      if (card) {
+        card.classList.remove('poor');
+        void card.offsetWidth;
+        card.classList.add('poor');
+      }
+      AudioFX.hurt();
+      return;
+    }
+    meta.embers -= cost;
+    meta.talents[id] = lv + 1;
+    saveMeta();
+    AudioFX.achievement();
+    renderTalentScreen();
+    renderArchive();
+  }
+
+  function openTalentScreen() {
+    AudioFX.init(); AudioFX.resume();
+    AudioFX.hover();
+    renderTalentScreen();
+    talentScreen.classList.remove('hidden');
+  }
+
+  function closeTalentScreen() {
+    talentScreen.classList.add('hidden');
+    AudioFX.select();
   }
 
   /* =========================================================
@@ -700,6 +838,11 @@
     const closeS = $('btn-settings-close');
     if (closeS) closeS.addEventListener('click', closeSettings);
 
+    const openT = $('btn-talent-menu');
+    if (openT) openT.addEventListener('click', openTalentScreen);
+    const closeT = $('btn-talent-close');
+    if (closeT) closeT.addEventListener('click', closeTalentScreen);
+
     const openA = $('btn-archive-menu');
     if (openA) openA.addEventListener('click', () => {
       AudioFX.init(); AudioFX.resume();
@@ -783,6 +926,7 @@
       if (code === 'Escape') {
         if (settingsScreen && !settingsScreen.classList.contains('hidden')) { closeSettings(); return; }
         if (archiveScreen && !archiveScreen.classList.contains('hidden')) { archiveScreen.classList.add('hidden'); AudioFX.select(); return; }
+        if (talentScreen && !talentScreen.classList.contains('hidden')) { closeTalentScreen(); return; }
         if (weaponScreen && !weaponScreen.classList.contains('hidden')) { closeWeaponSelect(); return; }
       }
 
@@ -806,6 +950,7 @@
 
     window.addEventListener('blur', () => {
       input.keys = Object.create(null);
+      resetJoy();
       if (state === 'playing') togglePause();
     });
 
@@ -863,9 +1008,79 @@
     window.addEventListener('contextmenu', e => e.preventDefault());
   }
 
+  /* ---------------- 触屏操作 ---------------- */
+  let joyPointer = null;
+
+  function resetJoy() {
+    input.joy.active = false;
+    input.joy.x = 0;
+    input.joy.y = 0;
+    if (joyKnob) joyKnob.style.transform = '';
+  }
+
+  function setupTouchControls() {
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (coarse || location.search.indexOf('touch') >= 0) {
+      document.body.classList.add('touch');
+    }
+    if (!joyBase || !joyKnob || !touchDash) return;
+
+    function setJoy(e) {
+      const r = joyBase.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const max = r.width * 0.34;
+      let dx = e.clientX - cx, dy = e.clientY - cy;
+      const d = Math.hypot(dx, dy);
+      if (d > max) { dx = dx / d * max; dy = dy / d * max; }
+      joyKnob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      const nx = dx / max, ny = dy / max;
+      if (Math.hypot(nx, ny) > 0.16) {
+        input.joy.active = true;
+        input.joy.x = nx;
+        input.joy.y = ny;
+      } else {
+        input.joy.active = false;
+        input.joy.x = 0;
+        input.joy.y = 0;
+      }
+    }
+
+    joyBase.addEventListener('pointerdown', e => {
+      if (state !== 'playing') return;
+      e.preventDefault();
+      joyPointer = e.pointerId;
+      try { joyBase.setPointerCapture(e.pointerId); } catch (err) {}
+      setJoy(e);
+    });
+    joyBase.addEventListener('pointermove', e => {
+      if (e.pointerId !== joyPointer) return;
+      e.preventDefault();
+      setJoy(e);
+    });
+    const endJoy = e => {
+      if (e.pointerId !== joyPointer) return;
+      joyPointer = null;
+      resetJoy();
+    };
+    joyBase.addEventListener('pointerup', endJoy);
+    joyBase.addEventListener('pointercancel', endJoy);
+    joyBase.addEventListener('lostpointercapture', endJoy);
+
+    touchDash.addEventListener('pointerdown', e => {
+      if (state !== 'playing') return;
+      e.preventDefault();
+      input.dashQueued = true;
+      touchDash.classList.add('pressed');
+    });
+    const releaseDash = () => touchDash.classList.remove('pressed');
+    touchDash.addEventListener('pointerup', releaseDash);
+    touchDash.addEventListener('pointercancel', releaseDash);
+  }
+
   function togglePause() {
     if (state === 'playing') {
       state = 'paused';
+      resetJoy();
       pauseScreen.classList.remove('hidden');
       $('pause-time').textContent = fmtTime(game.t);
       $('pause-kills').textContent = game.kills;
@@ -1061,10 +1276,15 @@
     if (input.keys['KeyD'] || input.keys['ArrowRight']) mx += 1;
     if (input.keys['KeyW'] || input.keys['ArrowUp']) my -= 1;
     if (input.keys['KeyS'] || input.keys['ArrowDown']) my += 1;
-    const moving = mx !== 0 || my !== 0;
-    if (moving) {
+    let moving = false;
+    if (input.joy.active) {
+      mx = input.joy.x;
+      my = input.joy.y;
+      moving = Math.hypot(mx, my) > 0.05;
+    } else if (mx !== 0 || my !== 0) {
       const l = Math.hypot(mx, my);
       mx /= l; my /= l;
+      moving = true;
     }
 
     // 冲刺
@@ -1159,6 +1379,7 @@
     p.dashT = 0.16;
     p.dashCd = p.dashCdMax * p.dashCdMult;
     p.invuln = Math.max(p.invuln, 0.34);
+    g.stats.dashes++;
     p.afterimages.push({ x: p.x, y: p.y, a: p.aim, life: 0.3, max: 0.3 });
     g.trauma = Math.min(1, g.trauma + 0.16);
     AudioFX.dash();
@@ -1408,6 +1629,22 @@
       dead: false,
       elitePulse: Math.random() * TAU
     };
+
+    if (elite) {
+      const ar = Math.random();
+      e.affix = ar < 0.36 ? 'frenzy' : ar < 0.68 ? 'shield' : 'split';
+      e.affixPulse = Math.random() * TAU;
+      if (e.affix === 'frenzy') {
+        e.speed *= 1.32;
+        e.damage *= 1.12;
+        e.hp *= 0.9;
+        e.maxHp *= 0.9;
+      } else if (e.affix === 'shield') {
+        e.shieldMax = e.maxHp * 0.38;
+        e.shield = e.shieldMax;
+        e.shieldHitT = 0;
+      }
+    }
     g.enemies.push(e);
 
     // 传送门效果
@@ -1470,13 +1707,15 @@
       orbCd: 0, dead: false,
       state: 'chase', stateT: 1.8, attackCd: 1.6,
       beamAngle: 0, beamDone: false,
-      pulse: 0, name: BOSS_NAMES[index % BOSS_NAMES.length]
+      pulse: 0, name: BOSS_NAMES[index % BOSS_NAMES.length],
+      enraged: false, ragePulse: 0
     };
     g.enemies.push(b);
     g.boss = b;
 
     bossName.textContent = b.name;
     bossFill.style.width = '100%';
+    bossBar.classList.remove('enraged');
     bossBar.classList.remove('hidden');
     toast(b.name + ' 苏醒');
     AudioFX.bossRoar();
@@ -1507,6 +1746,14 @@
       e.hitFlash = Math.max(0, e.hitFlash - dt * 8);
       e.orbCd = Math.max(0, e.orbCd - dt);
       e.elitePulse += dt * 2;
+
+      // 护盾词缀：脱战 6 秒后缓慢恢复
+      if (e.shieldMax) {
+        if (e.shieldHitT > 0) e.shieldHitT -= dt;
+        else if (e.shield < e.shieldMax) {
+          e.shield = Math.min(e.shieldMax, e.shield + e.shieldMax * 0.1 * dt);
+        }
+      }
 
       if (e.spawnT > 0) {
         e.spawnT -= dt;
@@ -1696,9 +1943,37 @@
     }
   }
 
+  function enrageBoss(b) {
+    const g = game;
+    if (b.enraged) return;
+    b.enraged = true;
+    b.ragePulse = 0;
+    bossBar.classList.add('enraged');
+    toast(b.name + ' · 狂暴');
+    AudioFX.bossRoar();
+    AudioFX.warning();
+    g.trauma = 1;
+    g.slowmo = 0.45;
+    g.hitStop = 0.08;
+    g.lights.push({ x: b.x, y: b.y, r: 520, life: 1.4, maxLife: 1.4, color: '#ff2f4f' });
+    for (let i = 0; i < 36; i++) {
+      const a = Math.random() * TAU;
+      addParticle({
+        type: 'dot', x: b.x, y: b.y,
+        vx: Math.cos(a) * rand(120, 420), vy: Math.sin(a) * rand(120, 420),
+        life: rand(0.4, 1.0), max: 1.0, size: rand(2, 5),
+        color: i % 2 ? '#ff2f4f' : '#ffb0a0', add: true
+      });
+    }
+    addParticle({ type: 'ring', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.9, max: 0.9, size: 240, color: '#ff2f4f', add: true, width: 5 });
+  }
+
   function updateBoss(b, dt, nx, ny, dl) {
     const g = game, p = g.player;
     b.pulse += dt;
+    b.ragePulse = (b.ragePulse || 0) + dt;
+    if (!b.enraged && b.hp <= b.maxHp * 0.5) enrageBoss(b);
+    const rage = b.enraged ? 1.3 : 1;
     b.hitFlash = Math.max(0, b.hitFlash - dt * 6);
     let slow = 1;
     if (b.slowT > 0) { b.slowT -= dt; slow = 1 - b.slowAmt; }
@@ -1714,19 +1989,19 @@
 
     switch (b.state) {
       case 'chase': {
-        const sp = b.speed * slow * (dl > 220 ? 1 : 0.4);
+        const sp = b.speed * slow * rage * (dl > 220 ? 1 : 0.4);
         b.x += nx * sp * dt;
         b.y += ny * sp * dt;
-        b.attackCd -= dt;
+        b.attackCd -= dt * (b.enraged ? 1.45 : 1);
         if (b.attackCd <= 0) startBossAttack(b);
         break;
       }
       case 'slamWind': {
-        b.stateT -= dt;
+        b.stateT -= dt * rage;
         if (b.stateT <= 0) {
           b.state = 'slam';
           b.stateT = 0.28;
-          const R = 165;
+          const R = b.enraged ? 195 : 165;
           addParticle({ type: 'ring', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.55, max: 0.55, size: R, color: '#ff5c8a', add: true, width: 5 });
           addParticle({ type: 'ring', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.8, max: 0.8, size: R * 0.7, color: '#ffb0c4', add: true, width: 2 });
           for (let i = 0; i < 26; i++) {
@@ -1735,25 +2010,26 @@
           }
           g.trauma = Math.min(1, g.trauma + 0.55);
           AudioFX.explosion(1.3);
-          if (dl < R + p.r) damagePlayer(26 * g.mode.dmg, b);
+          if (dl < R + p.r) damagePlayer((b.enraged ? 32 : 26) * g.mode.dmg, b);
         }
         break;
       }
       case 'slam': {
-        b.stateT -= dt;
+        b.stateT -= dt * rage;
         if (b.stateT <= 0) { b.state = 'chase'; b.attackCd = rand(2.0, 2.8); }
         break;
       }
       case 'burstWind': {
-        b.stateT -= dt;
+        b.stateT -= dt * rage;
         if (b.stateT <= 0) {
           b.state = 'chase';
           b.attackCd = rand(2.2, 3.0);
-          const n = 20;
+          const n = b.enraged ? 26 : 20;
+          const spd = b.enraged ? 220 : 190;
           const off = Math.random() * TAU;
           for (let i = 0; i < n; i++) {
             const a = off + i * TAU / n;
-            g.ebullets.push({ x: b.x, y: b.y, vx: Math.cos(a) * 190, vy: Math.sin(a) * 190, r: 8, damage: 11 * g.mode.dmg, life: 4.5, angle: a, kind: 'boss' });
+            g.ebullets.push({ x: b.x, y: b.y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, r: 8, damage: 11 * g.mode.dmg, life: 4.5, angle: a, kind: 'boss' });
           }
           addParticle({ type: 'ring', x: b.x, y: b.y, vx: 0, vy: 0, life: 0.4, max: 0.4, size: 100, color: '#d77bff', add: true, width: 3 });
           AudioFX.explosion(0.7);
@@ -1761,11 +2037,12 @@
         break;
       }
       case 'summon': {
-        b.stateT -= dt;
+        b.stateT -= dt * rage;
         if (b.stateT <= 0) {
           b.state = 'chase';
           b.attackCd = rand(2.6, 3.4);
-          for (let i = 0; i < 7; i++) {
+          const n = b.enraged ? 10 : 7;
+          for (let i = 0; i < n; i++) {
             const a = Math.random() * TAU, d = rand(80, 150);
             spawnEnemy(Math.random() < 0.6 ? 'swarm' : 'ghoul', b.x + Math.cos(a) * d, b.y + Math.sin(a) * d, false);
           }
@@ -1774,9 +2051,9 @@
         break;
       }
       case 'beamWind': {
-        b.stateT -= dt;
+        b.stateT -= dt * rage;
         const targetA = Math.atan2(p.y - b.y, p.x - b.x);
-        b.beamAngle = angleLerp(b.beamAngle, targetA, Math.min(1, dt * 2.4));
+        b.beamAngle = angleLerp(b.beamAngle, targetA, Math.min(1, dt * 2.4 * (b.enraged ? 1.5 : 1)));
         if (b.stateT <= 0) {
           b.state = 'beam';
           b.stateT = 0.55;
@@ -1786,7 +2063,7 @@
         break;
       }
       case 'beam': {
-        b.stateT -= dt;
+        b.stateT -= dt * rage;
         if (!b.beamDone) {
           b.beamDone = true;
           const bx = b.x, by = b.y;
@@ -1794,7 +2071,7 @@
           const proj = dxp * Math.cos(b.beamAngle) + dyp * Math.sin(b.beamAngle);
           if (proj > 0) {
             const perp = Math.abs(-dxp * Math.sin(b.beamAngle) + dyp * Math.cos(b.beamAngle));
-            if (perp < 30 + p.r && proj < 1100) damagePlayer(24 * g.mode.dmg, b);
+            if (perp < (b.enraged ? 38 : 30) + p.r && proj < 1100) damagePlayer((b.enraged ? 30 : 24) * g.mode.dmg, b);
           }
           g.trauma = Math.min(1, g.trauma + 0.3);
         }
@@ -1998,12 +2275,32 @@
   function damageEnemy(e, dmg, opts) {
     if (e.dead) return;
     opts = opts || {};
-    e.hp -= dmg;
+    let hpDmg = dmg;
+    let shielded = false;
+    if (e.shield > 0) {
+      const absorbed = Math.min(e.shield, dmg);
+      e.shield -= absorbed;
+      hpDmg = dmg - absorbed;
+      e.shieldHitT = 6;
+      shielded = absorbed > 0;
+      if (shielded) {
+        for (let i = 0; i < 3; i++) {
+          const a = Math.random() * TAU;
+          addParticle({
+            type: 'dot', x: e.x + Math.cos(a) * e.r, y: e.y + Math.sin(a) * e.r,
+            vx: Math.cos(a) * rand(20, 90), vy: Math.sin(a) * rand(20, 90),
+            life: rand(0.15, 0.35), max: 0.35, size: rand(1, 2.4),
+            color: '#8ce8ff', add: true
+          });
+        }
+      }
+    }
+    e.hp -= hpDmg;
     e.hitFlash = Math.max(e.hitFlash, opts.dot ? 0.12 : 0.2);
     game.damageDealt += dmg;
 
     if (settings.damageNumbers && (!opts.silent || Math.random() < 0.35)) {
-      const col = opts.color || '#ffd0d8';
+      const col = shielded ? '#8ce8ff' : (opts.color || '#ffd0d8');
       addText(e.x + rand(-8, 8), e.y - e.r * 0.7, Math.round(dmg), opts.crit, col);
     }
 
@@ -2026,6 +2323,7 @@
       g.boss = null;
       g.bossKills++;
       unlockAch('boss_slayer');
+      bossBar.classList.remove('enraged');
       bossBar.classList.add('hidden');
       g.slowmo = 1.0;
       g.trauma = 1;
@@ -2057,11 +2355,21 @@
     g.kills++;
     g.combo++;
     g.comboT = 3;
+    if (g.combo > g.stats.maxCombo) g.stats.maxCombo = g.combo;
     if (g.kills === 1) unlockAch('first_blood');
     if (meta.kills + g.kills >= 500) unlockAch('kill_500');
     AudioFX.kill(clamp((e.x - p.x) / 500, -1, 1));
     AudioFX.gem(g.combo);
     g.trauma = Math.min(1, g.trauma + (e.elite ? 0.16 : 0.025));
+
+    // 分裂词缀：死亡时炸出三只小怪
+    if (e.affix === 'split' && g.enemies.length < 310) {
+      for (let i = 0; i < 3; i++) {
+        const a = Math.random() * TAU, d = rand(14, 34);
+        spawnEnemy('swarm', e.x + Math.cos(a) * d, e.y + Math.sin(a) * d, false);
+      }
+      addParticle({ type: 'ring', x: e.x, y: e.y, vx: 0, vy: 0, life: 0.55, max: 0.55, size: e.r * 2.4, color: '#b48cff', add: true, width: 3 });
+    }
 
     // 死亡粒子
     const n = e.elite ? 30 : (e.type === 'brute' ? 22 : 12);
@@ -2113,6 +2421,7 @@
     const g = game, p = g.player;
     if (p.dead || p.invuln > 0 || p.dashT > 0 || state !== 'playing') return;
     p.hp -= amount;
+    g.stats.damageTaken += amount;
     p.invuln = 1.15;
     p.hurtFlash = 1;
     g.trauma = Math.min(1, g.trauma + 0.5);
@@ -2268,7 +2577,9 @@
     }
     if (leveled) {
       if (g.level >= 15) unlockAch('level_15');
+      const before = g.player.hp;
       g.player.hp = Math.min(g.player.maxHp, g.player.hp + g.player.maxHp * 0.08);
+      g.stats.healing += g.player.hp - before;
       AudioFX.levelUp();
       fxFlash.style.opacity = '0.55';
       setTimeout(() => { fxFlash.style.opacity = '0'; }, 140);
@@ -2286,7 +2597,9 @@
       const d2 = dist2(it.x, it.y, p.x, p.y);
       if (d2 < 42 * 42) {
         if (it.kind === 'heart') {
+          const healed = Math.min(p.maxHp - p.hp, 30);
           p.hp = Math.min(p.maxHp, p.hp + 30);
+          g.stats.healing += healed;
           AudioFX.heal();
           toast('生命 +30');
           addParticle({ type: 'ring', x: p.x, y: p.y, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 60, color: '#ff6b8a', add: true, width: 2 });
@@ -2414,6 +2727,7 @@
     const u = g.offers[idx];
     if (!u) return;
     Upgrades.apply(g.player, u);
+    if (g.stats.picks.length < 120) g.stats.picks.push(u.id);
     AudioFX.select();
     const rar = Upgrades.RARITY[u.rarity];
     toast('获得 · ' + u.name + (rar && (u.rarity === 'legendary' || u.rarity === 'epic') ? '  ' + rar.cn : ''));
@@ -2530,6 +2844,7 @@
 
     drawLighting(g);
     drawGlowPass(g);
+    drawIndicators(g);
     drawDamageTexts(g);
     drawDawnOverlay(g);
   }
@@ -2844,16 +3159,45 @@
         ctx.restore();
       }
 
-      // 精英光环
+      // 精英光环 + 词缀标记
       if (e.elite) {
+        const ac = AFFIX_COLORS[e.affix] || '#ffbe6a';
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.35 + Math.sin(e.elitePulse) * 0.12;
-        ctx.strokeStyle = '#ffbe6a';
+        ctx.strokeStyle = ac;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(e.x, e.y, e.r * 1.35, 0, TAU);
         ctx.stroke();
+
+        if (e.affix === 'shield' && e.shieldMax) {
+          const frac = Math.max(0, e.shield / e.shieldMax);
+          ctx.globalAlpha = 0.55 + Math.sin(e.elitePulse * 1.6) * 0.1;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, e.r * 1.55, -Math.PI / 2, -Math.PI / 2 + TAU * frac);
+          ctx.stroke();
+        } else if (e.affix === 'frenzy') {
+          ctx.globalAlpha = 0.5;
+          ctx.lineWidth = 1.6;
+          for (let k = 0; k < 2; k++) {
+            const off = e.r * (1.5 + k * 0.18);
+            const a0 = e.angle + 0.5;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, off, a0, a0 + 0.55);
+            ctx.stroke();
+          }
+        } else if (e.affix === 'split') {
+          ctx.globalAlpha = 0.55;
+          for (let k = 0; k < 3; k++) {
+            const a = e.elitePulse * 1.4 + k * TAU / 3;
+            ctx.beginPath();
+            ctx.arc(e.x + Math.cos(a) * e.r * 1.5, e.y + Math.sin(a) * e.r * 1.5, 2.2, 0, TAU);
+            ctx.fillStyle = ac;
+            ctx.fill();
+          }
+        }
         ctx.restore();
       }
 
@@ -2871,14 +3215,38 @@
         ctx.restore();
       }
 
+      // Boss 狂暴光环
+      if (e.boss && e.enraged) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const k = 0.45 + Math.sin(e.ragePulse * 4) * 0.18;
+        const grd = ctx.createRadialGradient(e.x, e.y, e.r * 0.4, e.x, e.y, e.r * 2.1);
+        grd.addColorStop(0, 'rgba(255,47,79,0)');
+        grd.addColorStop(0.72, 'rgba(255,47,79,' + (0.13 * k) + ')');
+        grd.addColorStop(1, 'rgba(255,47,79,0)');
+        ctx.fillStyle = grd;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 2.1, 0, TAU); ctx.fill();
+        ctx.globalAlpha = k;
+        ctx.strokeStyle = '#ff2f4f';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r * (1.25 + Math.sin(e.ragePulse * 3) * 0.05), 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       // 精英血条
       if (e.elite && !e.boss) {
         const w = 34, h = 3;
         const yy = e.y - e.r - 12;
         ctx.fillStyle = 'rgba(0,0,0,.55)';
         ctx.fillRect(e.x - w / 2, yy, w, h);
-        ctx.fillStyle = '#ffbe6a';
+        ctx.fillStyle = AFFIX_COLORS[e.affix] || '#ffbe6a';
         ctx.fillRect(e.x - w / 2, yy, w * Math.max(0, e.hp / e.maxHp), h);
+        if (e.shieldMax && e.shield > 0) {
+          ctx.fillStyle = '#8ce8ff';
+          ctx.fillRect(e.x - w / 2, yy - 3, w * Math.max(0, e.shield / e.shieldMax), 2);
+        }
       }
     }
   }
@@ -3510,18 +3878,24 @@
     if (g.boss && !g.boss.dead) {
       const b = g.boss;
       const grd = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 200);
-      grd.addColorStop(0, 'rgba(190,60,255,.16)');
-      grd.addColorStop(1, 'rgba(190,60,255,0)');
+      if (b.enraged) {
+        grd.addColorStop(0, 'rgba(255,47,79,.2)');
+        grd.addColorStop(1, 'rgba(255,47,79,0)');
+      } else {
+        grd.addColorStop(0, 'rgba(190,60,255,.16)');
+        grd.addColorStop(1, 'rgba(190,60,255,0)');
+      }
       ctx.fillStyle = grd;
       ctx.beginPath(); ctx.arc(b.x, b.y, 200, 0, TAU); ctx.fill();
     }
 
-    // 精英辉光
+    // 精英辉光（按词缀着色）
     for (const e of g.enemies) {
       if (!e.elite || e.boss) continue;
+      const col = e.affix === 'shield' ? '140,232,255' : e.affix === 'split' ? '180,140,255' : e.affix === 'frenzy' ? '255,107,107' : '255,190,100';
       const grd = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.r * 2.4);
-      grd.addColorStop(0, 'rgba(255,190,100,.14)');
-      grd.addColorStop(1, 'rgba(255,150,60,0)');
+      grd.addColorStop(0, 'rgba(' + col + ',.16)');
+      grd.addColorStop(1, 'rgba(' + col + ',0)');
       ctx.fillStyle = grd;
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 2.4, 0, TAU); ctx.fill();
     }
@@ -3542,6 +3916,94 @@
     ctx.globalAlpha = 1;
 
     ctx.restore();
+  }
+
+  /* 屏幕边缘目标指示：Boss / 精英 / 心 */
+  function drawIndicators(g) {
+    if (!g || state !== 'playing') return;
+    const cam = g.camera;
+    const cx = W / 2, cy = H / 2;
+    const padX = 54, padTop = 92, padBottom = 92;
+    const left = padX, right = W - padX, top = padTop, bottom = H - padBottom;
+    const list = [];
+
+    if (g.boss && !g.boss.dead) {
+      list.push({ x: g.boss.x, y: g.boss.y, color: '#ff5c8a', label: 'BOSS', size: 13, kind: 'boss' });
+    }
+    for (const e of g.enemies) {
+      if (!e.elite || e.boss) continue;
+      list.push({ x: e.x, y: e.y, color: AFFIX_COLORS[e.affix] || '#ffbe6a', label: (AFFIX_NAMES[e.affix] || '精').charAt(0), size: 8, kind: 'elite' });
+    }
+    for (const it of g.pickups) {
+      if (it.kind !== 'heart') continue;
+      list.push({ x: it.x, y: it.y, color: '#ff8aa0', label: '+', size: 8, kind: 'heart' });
+    }
+
+    const placed = [];
+    let eliteCount = 0, heartCount = 0;
+
+    for (const t of list) {
+      if (t.kind === 'elite') { if (eliteCount >= 4) continue; }
+      if (t.kind === 'heart') { if (heartCount >= 2) continue; }
+
+      const sx = (t.x - cam.x) * zoom + W / 2;
+      const sy = (t.y - cam.y) * zoom + H / 2;
+      if (sx > 64 && sx < W - 64 && sy > padTop - 20 && sy < H - padBottom + 20) continue;
+
+      const a = Math.atan2(sy - cy, sx - cx);
+      const dx = Math.cos(a), dy = Math.sin(a);
+      let tt = Infinity;
+      if (dx > 0.0001) tt = Math.min(tt, (right - cx) / dx);
+      else if (dx < -0.0001) tt = Math.min(tt, (left - cx) / dx);
+      if (dy > 0.0001) tt = Math.min(tt, (bottom - cy) / dy);
+      else if (dy < -0.0001) tt = Math.min(tt, (top - cy) / dy);
+      if (!isFinite(tt)) continue;
+      const px = cx + dx * tt, py = cy + dy * tt;
+
+      let near = false;
+      for (const q of placed) {
+        if (dist2(px, py, q.x, q.y) < 38 * 38) { near = true; break; }
+      }
+      if (near) continue;
+      placed.push({ x: px, y: py });
+      if (t.kind === 'elite') eliteCount++;
+      if (t.kind === 'heart') heartCount++;
+
+      const pulse = 0.62 + Math.sin(g.t * 4.2 + px * 0.02) * 0.2;
+      const s = t.size;
+
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(a);
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = t.color;
+      ctx.beginPath();
+      ctx.moveTo(s, 0);
+      ctx.lineTo(-s * 0.62, s * 0.56);
+      ctx.lineTo(-s * 0.62, -s * 0.56);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = pulse * 0.4;
+      ctx.strokeStyle = t.color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, s + 6, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+
+      if (t.label) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, pulse + 0.15);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = (t.kind === 'boss' ? '600 9px Cinzel, serif' : '600 9px "Songti SC", serif');
+        ctx.fillStyle = t.color;
+        ctx.shadowColor = 'rgba(0,0,0,.85)';
+        ctx.shadowBlur = 5;
+        ctx.fillText(t.label, px - dx * (s + 15), py - dy * (s + 15));
+        ctx.restore();
+      }
+    }
   }
 
   function drawDamageTexts(g) {
@@ -3595,6 +4057,7 @@
     const dashPct = p.dashCd <= 0 ? 100 : (1 - p.dashCd / (p.dashCdMax * p.dashCdMult)) * 100;
     $('dash-ring').style.setProperty('--dash-pct', dashPct + '%');
     $('hud-dash').classList.toggle('ready', p.dashCd <= 0);
+    if (touchDash) touchDash.classList.toggle('ready', p.dashCd <= 0);
 
     if (!force && hudTick % 4 !== 0) return;
 
@@ -3638,6 +4101,9 @@
       for (const e of game.enemies) if (!e.dead) killEnemy(e);
     },
     hurt: n => { if (game) damagePlayer(n || 20); },
+    addEmbers: n => { meta.embers = (meta.embers || 0) + (n || 0); saveMeta(); renderTalentScreen(); },
+    openTalent: () => openTalentScreen(),
+    enrage: () => { if (game && game.boss) enrageBoss(game.boss); },
     levelUp: () => { if (game) { game.pendingLevels++; openLevelUp(); } },
     spawn: (t, n) => {
       if (!game) return;
@@ -3645,6 +4111,11 @@
         const a = Math.random() * TAU, d = 300;
         spawnEnemy(t || 'ghoul', game.player.x + Math.cos(a) * d, game.player.y + Math.sin(a) * d, false);
       }
+    },
+    spawnElite: t => {
+      if (!game) return null;
+      const a = Math.random() * TAU, d = 260;
+      return spawnEnemy(t || 'brute', game.player.x + Math.cos(a) * d, game.player.y + Math.sin(a) * d, true);
     },
     // 无头测试用：手动推进若干帧
     step: (dt, n) => {
