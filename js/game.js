@@ -786,6 +786,9 @@
         if (weaponScreen && !weaponScreen.classList.contains('hidden')) { closeWeaponSelect(); return; }
       }
 
+      // 设置打开时，屏蔽其他游戏按键（避免在设置界面背后误恢复游戏）
+      if (settingsScreen && !settingsScreen.classList.contains('hidden')) return;
+
       if (code === 'Escape' || code === 'KeyP') {
         if (state === 'playing' || state === 'paused') togglePause();
         return;
