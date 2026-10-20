@@ -196,14 +196,14 @@ window.Upgrades = (function () {
     return base;
   }
 
-  function pickWeighted(pool, player) {
+  function pickWeighted(pool, player, rng) {
     let total = 0;
     const weights = pool.map(u => {
       const w = weightOf(u, player.luck);
       total += w;
       return w;
     });
-    let r = Math.random() * total;
+    let r = (rng || Math.random)() * total;
     for (let i = 0; i < pool.length; i++) {
       r -= weights[i];
       if (r <= 0) return i;
@@ -214,19 +214,20 @@ window.Upgrades = (function () {
   // 输出类强化：每次升级至少保证出现一个，避免连续拿到纯功能牌
   const OFFENSE = ['power', 'rapid', 'pierce', 'spread', 'crit', 'critdmg', 'caliber', 'burn', 'chain', 'explode', 'orb', 'aura', 'velocity', 'dawnfire'];
 
-  function roll(player, count) {
+  function roll(player, count, rng) {
+    rng = rng || Math.random;
     const pool = LIST.filter(u => (player.upgrades[u.id] || 0) < u.max);
     const out = [];
     if (count > 0) {
       const off = pool.filter(u => OFFENSE.indexOf(u.id) >= 0);
       if (off.length > 0) {
-        const u = off[pickWeighted(off, player)];
+        const u = off[pickWeighted(off, player, rng)];
         out.push(u);
         pool.splice(pool.indexOf(u), 1);
       }
     }
     while (out.length < count && pool.length > 0) {
-      const i = pickWeighted(pool, player);
+      const i = pickWeighted(pool, player, rng);
       out.push(pool.splice(i, 1)[0]);
     }
     while (out.length < count) out.push(MEND);

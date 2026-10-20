@@ -21,6 +21,12 @@ window.AudioFX = (function () {
   let lastShot = 0;
   let lastHit = 0;
   let lastGem = 0;
+  // 动态战斗层
+  let combatLevel = 0;
+  let bossMusic = false;
+  let combatTimer = null;
+  let combatStep = 0;
+  let bossDrone = null;
 
   const CHORDS = [
     [110.00, 130.81, 164.81], // Am
@@ -179,6 +185,14 @@ window.AudioFX = (function () {
     noise(0.2, 'bandpass', 500, 1.2, 0.1);
     // 噪声扫频用滤波器近似
     tone('sine', 240, 700, 0.16, 0.035);
+  }
+
+  // 护盾破碎：金属脆响
+  function shield() {
+    if (!ready || muted) return;
+    noise(0.22, 'highpass', 3200, 1.1, 0.1);
+    tone('triangle', 960, 520, 0.3, 0.075);
+    tone('sine', 1480, 740, 0.26, 0.03);
   }
 
   function levelUp() {
@@ -348,6 +362,8 @@ window.AudioFX = (function () {
   }
 
   function stopAmbient() {
+    stopCombatLoop();
+    stopBossDrone();
     if (!ambientOn || !ready) return;
     ambientOn = false;
     if (ambientTimer) { clearInterval(ambientTimer); ambientTimer = null; }
@@ -371,6 +387,87 @@ window.AudioFX = (function () {
     musicBus.gain.setTargetAtTime(0.85 + p * 0.35, t, 1.5);
   }
 
+  /* ---------- 动态战斗层 ---------- */
+  function startCombatLoop() {
+    if (combatTimer) return;
+    combatTimer = setInterval(combatTick, 190);
+  }
+  function stopCombatLoop() {
+    if (combatTimer) { clearInterval(combatTimer); combatTimer = null; }
+    combatStep = 0;
+  }
+
+  function combatTick() {
+    if (!ready || muted || !ambientOn) return;
+    const lv = bossMusic ? Math.max(combatLevel, 0.78) : combatLevel;
+    if (lv < 0.08) return;
+    combatStep++;
+    // 心跳般的低鼓
+    if (combatStep % 4 === 1) tone('sine', 58, 34, 0.24, 0.05 * lv);
+    // 军鼓噪声
+    if (lv > 0.28 && combatStep % 2 === 0) {
+      noise(0.07, 'bandpass', 1700 + lv * 900, 1.1, 0.015 * lv);
+    }
+    // 高音镲，仅高压时出现
+    if (lv > 0.58 && combatStep % 4 === 3) {
+      noise(0.12, 'highpass', 5200, 0.7, 0.012 * lv);
+    }
+    // Boss：每八拍一记闷响
+    if (bossMusic && combatStep % 8 === 0) {
+      tone('sawtooth', 41, 28, 0.7, 0.045);
+    }
+  }
+
+  // 0..1，根据场上敌人数量与连击调节战斗强度
+  function setCombatLevel(v) {
+    combatLevel = clamp01(v);
+    if (!ready || !ambientOn) return;
+    if (combatLevel > 0.06 || bossMusic) startCombatLoop();
+    else stopCombatLoop();
+  }
+
+  function startBossDrone() {
+    if (bossDrone || !ready || !ambientOn) return;
+    const t = now();
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.045, t + 1.4);
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 340;
+    const o1 = ctx.createOscillator();
+    o1.type = 'sawtooth';
+    o1.frequency.value = 55;
+    const o2 = ctx.createOscillator();
+    o2.type = 'sawtooth';
+    o2.frequency.value = 77.78;
+    o2.detune.value = 9;
+    o1.connect(f); o2.connect(f); f.connect(g); g.connect(musicBus);
+    o1.start(t); o2.start(t);
+    bossDrone = { o1, o2, g };
+  }
+
+  function stopBossDrone() {
+    if (!bossDrone) return;
+    const d = bossDrone;
+    bossDrone = null;
+    const t = now();
+    try {
+      d.g.gain.cancelScheduledValues(t);
+      d.g.gain.setTargetAtTime(0.0001, t, 0.35);
+    } catch (e) {}
+    setTimeout(() => { try { d.o1.stop(); d.o2.stop(); } catch (e) {} }, 1500);
+  }
+
+  function setBossMusic(on) {
+    on = !!on;
+    if (on === bossMusic) return;
+    bossMusic = on;
+    if (!ready || !ambientOn) return;
+    if (on) { startCombatLoop(); startBossDrone(); }
+    else { stopBossDrone(); if (combatLevel <= 0.06) stopCombatLoop(); }
+  }
+
   function setMuted(m) {
     muted = m;
     if (master && ready) {
@@ -392,8 +489,8 @@ window.AudioFX = (function () {
 
   return {
     init, resume, startAmbient, stopAmbient, setIntensity, setMuted, isMuted,
-    setVolume, getVolume,
-    shot, hit, crit, kill, gem, heal, hurt, dash, levelUp, select, hover,
+    setVolume, getVolume, setCombatLevel, setBossMusic,
+    shot, hit, crit, kill, gem, heal, hurt, dash, shield, levelUp, select, hover,
     explosion, bossRoar, portal, victory, gameOver, heartbeat, warning, achievement
   };
 })();

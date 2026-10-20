@@ -951,6 +951,119 @@ window.Art = (function () {
       ctx.restore();
     }, 2);
 
+    // 磁石：吸取全部经验
+    const magnet = sprite(48, (ctx) => {
+      ctx.save();
+      ctx.shadowColor = 'rgba(120,240,200,.85)';
+      ctx.shadowBlur = 16;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#7cf0c8';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.arc(0, 2, 10, Math.PI, 0);
+      ctx.lineTo(10, 13);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-10, 2);
+      ctx.lineTo(-10, 13);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#eafff8';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-10, 13); ctx.lineTo(-10, 8);
+      ctx.moveTo(10, 13); ctx.lineTo(10, 8);
+      ctx.stroke();
+      ctx.restore();
+    }, 2);
+
+    // 夜火：清场爆破
+    const bomb = sprite(48, (ctx) => {
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,150,80,.9)';
+      ctx.shadowBlur = 18;
+      const g = ctx.createRadialGradient(-4, -5, 1, 0, 1, 13);
+      g.addColorStop(0, '#8a6a5a');
+      g.addColorStop(0.45, '#3a2630');
+      g.addColorStop(1, '#160e16');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 2, 11, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = '#ffb066';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(5, -7);
+      ctx.quadraticCurveTo(11, -13, 8, -17);
+      ctx.stroke();
+      ctx.fillStyle = '#ffd97a';
+      ctx.beginPath();
+      ctx.arc(8, -18, 2.6, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,220,170,.55)';
+      ctx.beginPath();
+      ctx.arc(-4, -3, 3, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }, 2);
+
+    // 时之沙：冻结
+    const hourglass = sprite(48, (ctx) => {
+      ctx.save();
+      ctx.shadowColor = 'rgba(140,210,255,.85)';
+      ctx.shadowBlur = 16;
+      ctx.strokeStyle = '#bfe8ff';
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-8, -13); ctx.lineTo(8, -13);
+      ctx.lineTo(2, -1); ctx.lineTo(8, 12);
+      ctx.lineTo(-8, 12); ctx.lineTo(-2, -1);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = '#8ce8ff';
+      ctx.beginPath();
+      ctx.moveTo(-6, -11); ctx.lineTo(6, -11); ctx.lineTo(0, -3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-4, 10); ctx.lineTo(4, 10); ctx.lineTo(0, 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }, 2);
+
+    // 守夜护盾
+    const shieldPickup = sprite(48, (ctx) => {
+      ctx.save();
+      ctx.shadowColor = 'rgba(140,232,255,.9)';
+      ctx.shadowBlur = 18;
+      const g = ctx.createLinearGradient(0, -14, 0, 14);
+      g.addColorStop(0, '#e8fbff');
+      g.addColorStop(0.5, '#8ce8ff');
+      g.addColorStop(1, '#2a7f9e');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(11, -9);
+      ctx.lineTo(11, 1);
+      ctx.quadraticCurveTo(11, 10, 0, 14);
+      ctx.quadraticCurveTo(-11, 10, -11, 1);
+      ctx.lineTo(-11, -9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.7)';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(10,40,55,.65)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, -7); ctx.lineTo(0, 7);
+      ctx.moveTo(-4.5, -2); ctx.lineTo(4.5, -2);
+      ctx.stroke();
+      ctx.restore();
+    }, 2);
+
     // 阴影
     const shadow = makeCanvas(64, 64);
     {
@@ -983,7 +1096,7 @@ window.Art = (function () {
       ctx.stroke();
     }, 2);
 
-    return { gem, gemBig, heart, shadow, portal };
+    return { gem, gemBig, heart, shadow, portal, magnet, bomb, hourglass, shieldPickup };
   }
 
   /* =========================================================
