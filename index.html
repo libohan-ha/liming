@@ -735,7 +735,8 @@ body.touch #touch-ui{display:block;}
 #touch-dash:active,#touch-dash.pressed{transform:scale(.94);border-color:rgba(255,183,101,.7);}
 #touch-dash.ready{border-color:rgba(255,183,101,.65);box-shadow:0 0 24px rgba(255,183,101,.2);color:var(--amber-hot);}
 #touch-dash span{pointer-events:none;}
-body.touch{touch-action:none;overscroll-behavior:none;}
+body.touch{touch-action:pan-y;overscroll-behavior:none;}
+body.touch #game{touch-action:none;}
 body.touch .hud-bottom{
   left:50%;right:auto;bottom:172px;transform:translateX(-50%);
   width:min(340px,72vw);justify-content:center;
@@ -824,7 +825,32 @@ body.touch #mute-btn{right:22px;bottom:128px;}
 }
 .eb-chip b{color:var(--amber);margin-left:3px;}
 
+/* ============ 守夜人现场笔记 ============ */
+.watch-objective{position:absolute;left:30px;top:94px;max-width:calc(100vw - 180px);display:flex;flex-direction:column;gap:6px;color:var(--gold);font-size:11px;letter-spacing:.08em;text-shadow:0 2px 6px #000;}
+.watch-objective small{color:var(--paper-dim);font-size:9px;letter-spacing:.2em;}
+.pause-loadout{width:min(580px,88vw);padding:16px 20px;margin:0 0 20px;border:1px solid rgba(243,207,122,.2);border-left:2px solid var(--gold);background:linear-gradient(110deg,rgba(32,26,16,.82),rgba(9,13,23,.82));}
+.loadout-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
+.loadout-head span{font-size:9px;letter-spacing:.24em;color:var(--paper-dim);}
+.loadout-head b{font-family:var(--serif-cn);font-weight:400;color:var(--gold);letter-spacing:.12em;font-size:17px;}
+.loadout-items{display:flex;flex-wrap:wrap;gap:7px;max-height:130px;overflow:auto;margin-bottom:12px;scrollbar-width:thin;scrollbar-color:var(--moon-dim) transparent;}
+.loadout-chip{font-size:11px;border:1px solid rgba(168,220,255,.18);background:rgba(10,17,28,.65);padding:6px 9px;color:var(--paper);}
+.loadout-chip b{font-family:var(--serif-en);font-size:9px;color:var(--amber);margin-left:9px;}
+.loadout-empty{font-size:11px;color:var(--paper-dim);}
+.loadout-route{border-top:1px solid rgba(243,207,122,.13);padding-top:10px;font-size:11px;color:var(--paper-dim);line-height:1.8;}
+.loadout-route.ready{color:var(--gold);}
+.loadout-objectives{font-size:10px;color:var(--moon);margin-top:7px;}
+.end-watch{font-size:11px;color:var(--gold);margin-bottom:14px;}
+#pause-screen{padding:24px 0;overflow-y:auto;justify-content:safe center;}
+#pause-screen > *{flex-shrink:0;}
+#pause-screen .pause-title{margin-bottom:8px;}
+#pause-screen .pause-sub{margin-bottom:18px;}
+#pause-screen .pause-stats{margin-bottom:18px;}
+body.touch .mouse-hint{display:none;}
 @media (max-width:720px){
+  .watch-objective{left:16px;top:75px;font-size:9px;max-width:calc(100vw - 135px);line-height:1.6;}
+  .watch-objective small{font-size:8px;}
+  .pause-loadout{padding:12px 14px;}
+  .loadout-head b{font-size:14px;}
   /* 竖屏标题页：压缩排版，保证一屏内看得到每日试炼与菜单链接 */
   .menu-wrap{max-height:100vh;overflow-y:auto;padding:14px 4px 20px;scrollbar-width:none;}
   .menu-wrap::-webkit-scrollbar{display:none;}
@@ -930,6 +956,7 @@ body.touch #mute-btn{right:22px;bottom:128px;}
         <div class="kill-line"><b id="hud-kills">0</b>KILLS</div>
       </div>
     </div>
+    <div class="watch-objective"><span id="hud-objective">◇ 灯塔 0/3</span><small id="hud-aim">自动瞄准</small></div>
     <div class="hud-bottom">
       <div class="hp-wrap">
         <div class="hp-head">
@@ -1000,7 +1027,8 @@ body.touch #mute-btn{right:22px;bottom:128px;}
       <div class="menu-controls">
         <span><span class="key">WASD</span>移动</span>
         <span><span class="key">SPACE</span>冲刺</span>
-        <span><span class="key">自动</span>瞄准射击</span>
+        <span><span class="key">自动</span>射击</span>
+        <span class="mouse-hint"><span class="key">按住左键</span>定向</span>
         <span><span class="key">ESC</span>暂停</span>
       </div>
       <div class="menu-best">最佳记录 <b id="best-record">—</b></div>
@@ -1028,7 +1056,7 @@ body.touch #mute-btn{right:22px;bottom:128px;}
   </div>
 
   <!-- 暂停 -->
-  <div id="pause-screen" class="screen hidden">
+  <div id="pause-screen" class="screen hidden" role="dialog" aria-label="暂停与构筑">
     <div class="pause-title">停驻</div>
     <div class="pause-sub">THE NIGHT HOLDS ITS BREATH</div>
     <div class="pause-stats">
@@ -1036,6 +1064,12 @@ body.touch #mute-btn{right:22px;bottom:128px;}
       <div><b id="pause-kills">0</b>击杀</div>
       <div><b id="pause-level">1</b>等级</div>
     </div>
+    <section class="pause-loadout" aria-label="当前构筑与进化路线">
+      <div class="loadout-head"><span>守夜人装备</span><b id="pause-weapon">—</b></div>
+      <div id="pause-build" class="loadout-items"></div>
+      <div id="pause-evolution" class="loadout-route"></div>
+      <div id="pause-objectives" class="loadout-objectives"></div>
+    </section>
     <button class="btn primary" id="btn-resume">继续</button>
     <button class="btn" id="btn-restart">重新开始</button>
     <button class="btn" id="btn-settings-pause">设置</button>
@@ -1062,6 +1096,7 @@ body.touch #mute-btn{right:22px;bottom:128px;}
       <div class="ed-row"><span>最高连击</span><b id="end-combo">0</b></div>
       <div class="ed-row"><span>冲刺</span><b id="end-dash">0</b></div>
     </div>
+    <div class="end-watch" id="end-watch"></div>
     <div class="end-build" id="end-build"></div>
     <div class="end-actions">
       <button class="btn primary" id="btn-again">再来一次</button>
@@ -1177,6 +1212,8 @@ body.touch #mute-btn{right:22px;bottom:128px;}
 <script src="js/art.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/upgrades.js"></script>
+<script src="js/nightwatch.js"></script>
+<script src="js/atmosphere.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

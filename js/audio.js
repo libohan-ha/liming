@@ -7,8 +7,11 @@ window.AudioFX = (function () {
 
   let ctx = null;
   let master = null;
+  let sceneBus = null;
   let musicBus = null;
   let sfxBus = null;
+  let uiBus = null;
+  let paused = false;
   let noiseBuf = null;
   let muted = false;
   let volume = 0.55;
@@ -21,6 +24,9 @@ window.AudioFX = (function () {
   let lastShot = 0;
   let lastHit = 0;
   let lastGem = 0;
+  let lastFootstep = -Infinity;
+  let lastBeacon = -Infinity;
+  let footstepSide = 1;
   // 动态战斗层
   let combatLevel = 0;
   let bossMusic = false;
@@ -46,13 +52,22 @@ window.AudioFX = (function () {
     master.gain.value = muted ? 0 : volume;
     master.connect(ctx.destination);
 
+    // 暂停只关场景输出，主音量与菜单反馈不受影响。
+    sceneBus = ctx.createGain();
+    sceneBus.gain.value = paused ? 0 : 1;
+    sceneBus.connect(master);
+
     musicBus = ctx.createGain();
     musicBus.gain.value = 0.0;
-    musicBus.connect(master);
+    musicBus.connect(sceneBus);
 
     sfxBus = ctx.createGain();
     sfxBus.gain.value = 0.85;
-    sfxBus.connect(master);
+    sfxBus.connect(sceneBus);
+
+    uiBus = ctx.createGain();
+    uiBus.gain.value = 0.85;
+    uiBus.connect(master);
 
     // 噪声缓冲
     const len = ctx.sampleRate * 2;
@@ -96,7 +111,7 @@ window.AudioFX = (function () {
     src.connect(f); f.connect(g);
     if (pan != null) {
       const p = ctx.createStereoPanner();
-      p.pan.value = Math.max(-1, Math.min(1, pan));
+      p.pan.value = Number.isFinite(pan) ? Math.max(-1, Math.min(1, pan)) : 0;
       g.connect(p); p.connect(sfxBus);
     } else {
       g.connect(sfxBus);
@@ -105,8 +120,9 @@ window.AudioFX = (function () {
     src.stop(t + dur + 0.05);
   }
 
-  function tone(type, f0, f1, dur, gain, pan, delay) {
+  function tone(type, f0, f1, dur, gain, pan, delay, bus) {
     if (!ready) return;
+    const output = bus || sfxBus;
     const t = now() + (delay || 0);
     const o = ctx.createOscillator();
     o.type = type || 'sine';
@@ -117,28 +133,41 @@ window.AudioFX = (function () {
     o.connect(g);
     if (pan != null) {
       const p = ctx.createStereoPanner();
-      p.pan.value = Math.max(-1, Math.min(1, pan));
-      g.connect(p); p.connect(sfxBus);
+      p.pan.value = Number.isFinite(pan) ? Math.max(-1, Math.min(1, pan)) : 0;
+      g.connect(p); p.connect(output);
     } else {
-      g.connect(sfxBus);
+      g.connect(output);
     }
     o.start(t);
     o.stop(t + dur + 0.05);
   }
 
   /* ---------- 音效 ---------- */
-  function shot(pan) {
-    if (!ready || muted) return;
+  function shot(pan, weapon = 'pistol') {
+    if (!ready || muted || paused) return;
     const t = performance.now();
     if (t - lastShot < 38) return;
     lastShot = t;
-    noise(0.09, 'bandpass', 1400, 0.9, 0.16, pan);
-    tone('triangle', 190, 52, 0.11, 0.14, pan);
-    tone('square', 90, 40, 0.07, 0.05, pan);
+    if (weapon === 'shotgun') {
+      // 霰弹枪：宽厚爆裂与低频后坐。
+      noise(0.2, 'lowpass', 1700, 0.7, 0.2, pan);
+      noise(0.065, 'highpass', 3000, 0.6, 0.06, pan);
+      tone('sine', 115, 32, 0.24, 0.18, pan);
+      tone('triangle', 210, 55, 0.13, 0.08, pan);
+    } else if (weapon === 'repeater') {
+      // 连发手弩：短促弦鸣与轻机械咔哒，不复用火药声。
+      noise(0.04, 'bandpass', 2800, 1.7, 0.065, pan);
+      tone('triangle', 880, 330, 0.075, 0.065, pan);
+      tone('sine', 440, 180, 0.09, 0.04, pan);
+    } else {
+      noise(0.09, 'bandpass', 1400, 0.9, 0.16, pan);
+      tone('triangle', 190, 52, 0.11, 0.14, pan);
+      tone('square', 90, 40, 0.07, 0.05, pan);
+    }
   }
 
   function hit(pan) {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     const t = performance.now();
     if (t - lastHit < 26) return;
     lastHit = t;
@@ -147,19 +176,19 @@ window.AudioFX = (function () {
   }
 
   function crit(pan) {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     tone('triangle', 1200, 700, 0.09, 0.07, pan);
     noise(0.06, 'highpass', 4000, 0.8, 0.06, pan);
   }
 
   function kill(pan) {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     noise(0.12, 'lowpass', 700, 0.8, 0.1, pan);
     tone('sine', 130, 48, 0.16, 0.12, pan);
   }
 
   function gem(combo) {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     const t = performance.now();
     if (t - lastGem < 32) return;
     lastGem = t;
@@ -169,34 +198,65 @@ window.AudioFX = (function () {
   }
 
   function heal() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     [523.25, 659.25, 783.99].forEach((f, i) => tone('sine', f, f, 0.5, 0.055, null, i * 0.07));
   }
 
   function hurt() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     noise(0.28, 'lowpass', 900, 0.7, 0.2);
     tone('sawtooth', 160, 46, 0.34, 0.14);
     tone('square', 70, 34, 0.22, 0.08);
   }
 
   function dash() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     noise(0.2, 'bandpass', 500, 1.2, 0.1);
     // 噪声扫频用滤波器近似
     tone('sine', 240, 700, 0.16, 0.035);
   }
 
+  // 草地脚步：轻微沙沙声与落地闷响，左右脚交替。
+  function footstep() {
+    if (!ready || muted || paused) return;
+    const t = performance.now();
+    if (t - lastFootstep < 180) return;
+    lastFootstep = t;
+    footstepSide *= -1;
+    const pan = footstepSide * 0.12;
+    noise(0.065, 'lowpass', 850, 0.7, 0.027, pan);
+    tone('sine', 92, 48, 0.075, 0.035, pan);
+  }
+
+  // 信标脉冲：温暖、上行的两声提示，限制持续接近时的触发密度。
+  function beacon() {
+    if (!ready || muted || paused) return;
+    const t = performance.now();
+    if (t - lastBeacon < 700) return;
+    lastBeacon = t;
+    tone('sine', 659.25, 659.25, 0.38, 0.055);
+    tone('sine', 987.77, 987.77, 0.5, 0.04, null, 0.12);
+    tone('triangle', 1318.5, 1318.5, 0.3, 0.014, null, 0.12);
+  }
+
+  // 完美闪避：掠过的气流后接清亮双音，与普通冲刺区分。
+  function perfectDodge() {
+    if (!ready || muted || paused) return;
+    noise(0.13, 'highpass', 2800, 0.7, 0.04);
+    tone('triangle', 784, 1174.66, 0.2, 0.065);
+    tone('sine', 1568, 1568, 0.32, 0.035, null, 0.06);
+  }
+
   // 护盾破碎：金属脆响
   function shield() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     noise(0.22, 'highpass', 3200, 1.1, 0.1);
     tone('triangle', 960, 520, 0.3, 0.075);
     tone('sine', 1480, 740, 0.26, 0.03);
   }
 
   function levelUp() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     const notes = [392.0, 493.88, 587.33, 783.99, 987.77];
     notes.forEach((f, i) => {
       tone('sine', f, f, 0.85, 0.075, null, i * 0.085);
@@ -207,17 +267,17 @@ window.AudioFX = (function () {
 
   function select() {
     if (!ready || muted) return;
-    tone('triangle', 720, 980, 0.12, 0.07);
-    tone('sine', 1440, 1440, 0.16, 0.025);
+    tone('triangle', 720, 980, 0.12, 0.07, null, 0, uiBus);
+    tone('sine', 1440, 1440, 0.16, 0.025, null, 0, uiBus);
   }
 
   function hover() {
     if (!ready || muted) return;
-    tone('sine', 1100, 1250, 0.05, 0.018);
+    tone('sine', 1100, 1250, 0.05, 0.018, null, 0, uiBus);
   }
 
   function explosion(size) {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     const s = size || 1;
     noise(0.3 * s, 'lowpass', 500, 0.6, 0.18 * s);
     tone('sine', 90, 28, 0.4 * s, 0.18 * s);
@@ -225,20 +285,20 @@ window.AudioFX = (function () {
   }
 
   function bossRoar() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     tone('sawtooth', 72, 26, 1.4, 0.16);
     tone('sawtooth', 48, 22, 1.7, 0.12);
     noise(1.3, 'lowpass', 420, 0.8, 0.14);
   }
 
   function portal() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     tone('sine', 160, 420, 0.35, 0.03);
     noise(0.35, 'bandpass', 1200, 2, 0.03);
   }
 
   function victory() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     const chord = [261.63, 329.63, 392.0, 523.25, 659.25];
     chord.forEach((f, i) => {
       tone('sine', f, f, 3.2, 0.075, null, i * 0.12);
@@ -247,7 +307,7 @@ window.AudioFX = (function () {
   }
 
   function gameOver() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     [220, 174.61, 146.83, 110].forEach((f, i) => {
       tone('sine', f, f, 1.6, 0.08, null, i * 0.28);
       tone('triangle', f * 0.5, f * 0.5, 2.0, 0.04, null, i * 0.28);
@@ -256,7 +316,7 @@ window.AudioFX = (function () {
 
   // 低血量心跳：两声闷响
   function heartbeat(intensity) {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     const k = clamp01(intensity == null ? 0.7 : intensity);
     tone('sine', 62, 40, 0.18, 0.13 * k);
     tone('sine', 54, 34, 0.24, 0.09 * k, null, 0.17);
@@ -265,7 +325,7 @@ window.AudioFX = (function () {
 
   // Boss 预警：远处号角
   function warning() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     tone('sawtooth', 55, 41, 2.4, 0.075);
     tone('triangle', 110, 82, 2.0, 0.05, null, 0.08);
     tone('sine', 220, 165, 1.6, 0.03, null, 0.16);
@@ -274,7 +334,7 @@ window.AudioFX = (function () {
 
   // 成就解锁：清亮上行
   function achievement() {
-    if (!ready || muted) return;
+    if (!ready || muted || paused) return;
     [659.25, 830.61, 987.77, 1318.5].forEach((f, i) => {
       tone('sine', f, f, 0.6, 0.05, null, i * 0.075);
       tone('triangle', f * 2, f * 2, 0.4, 0.014, null, i * 0.075);
@@ -398,7 +458,7 @@ window.AudioFX = (function () {
   }
 
   function combatTick() {
-    if (!ready || muted || !ambientOn) return;
+    if (!ready || muted || paused || !ambientOn) return;
     const lv = bossMusic ? Math.max(combatLevel, 0.78) : combatLevel;
     if (lv < 0.08) return;
     combatStep++;
@@ -468,6 +528,21 @@ window.AudioFX = (function () {
     else { stopBossDrone(); if (combatLevel <= 0.06) stopCombatLoop(); }
   }
 
+  // 保留环境振荡器和定时器；30ms 淡入淡出避免瞬时音量跳变，不重建音乐。
+  function setPaused(on) {
+    on = !!on;
+    if (on === paused) return;
+    paused = on;
+    if (sceneBus && ready) {
+      const t = now();
+      const gain = sceneBus.gain;
+      const current = gain.value;
+      gain.cancelScheduledValues(t);
+      gain.setValueAtTime(current, t);
+      gain.linearRampToValueAtTime(paused ? 0 : 1, t + 0.03);
+    }
+  }
+
   function setMuted(m) {
     muted = m;
     if (master && ready) {
@@ -489,8 +564,9 @@ window.AudioFX = (function () {
 
   return {
     init, resume, startAmbient, stopAmbient, setIntensity, setMuted, isMuted,
-    setVolume, getVolume, setCombatLevel, setBossMusic,
-    shot, hit, crit, kill, gem, heal, hurt, dash, shield, levelUp, select, hover,
+    setVolume, getVolume, setCombatLevel, setBossMusic, setPaused,
+    shot, hit, crit, kill, gem, heal, hurt, dash, footstep, beacon, perfectDodge,
+    shield, levelUp, select, hover,
     explosion, bossRoar, portal, victory, gameOver, heartbeat, warning, achievement
   };
 })();

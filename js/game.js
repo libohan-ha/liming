@@ -241,6 +241,7 @@
   const input = {
     keys: Object.create(null),
     dashQueued: false,
+    pointer: { x: 0, y: 0, active: false },
     joy: { x: 0, y: 0, active: false }
   };
 
@@ -459,7 +460,8 @@
       hasTarget: false,
       evolved: false, evoId: null,
       evoLight: false, evoFlame: false, evoHoming: false,
-      shieldCharges: 0
+      shieldCharges: 0,
+      dodgeRewarded: false, focusT: 0, footstepT: 0
     };
     p.damageMult *= 1 + tl('power') * 0.03;
     p.pickupMult *= 1 + tl('magnet') * 0.06;
@@ -515,7 +517,9 @@
       daily: modeKey === 'daily',
       rng: modeKey === 'daily' ? mulberry32(seedFromString('lastlight:' + dailyKey())) : Math.random,
       freezeT: 0,
-      musicTimer: 0
+      musicTimer: 0,
+      beacons: Nightwatch.createBeacons(seedFromString('beacons:' + (modeKey === 'daily' ? dailyKey() : String(Date.now())))),
+      atmosphere: Atmosphere.create(seedFromString('rain:' + dailyKey()))
     };
     g.camera.x = 0; g.camera.y = 0;
     return g;
@@ -539,6 +543,11 @@
     AudioFX.init();
     AudioFX.resume();
     AudioFX.setVolume(settings.volume);
+    AudioFX.setPaused(false);
+    input.pointer.active = false;
+    input.keys = Object.create(null);
+    input.dashQueued = false;
+    resetJoy();
     AudioFX.startAmbient();
     AudioFX.setMuted(AudioFX.isMuted());
 
@@ -575,6 +584,8 @@
 
   function goMenu() {
     state = 'menu';
+    AudioFX.setPaused(false);
+    input.pointer.active = false;
     game = null;
     hideAllScreens();
     startScreen.classList.remove('hidden');
@@ -635,6 +646,7 @@
     $('end-taken').textContent = fmtNum(st.damageTaken);
     $('end-combo').textContent = st.maxCombo;
     $('end-dash').textContent = st.dashes;
+    $('end-watch').textContent = '点亮灯塔 ' + game.beacons.filter(b => b.done).length + '/3 · 精准闪避 ' + (st.perfectDodges || 0) + ' 次';
 
     const build = $('end-build');
     if (build) {
@@ -739,7 +751,9 @@
       time: Math.round(survived),
       kills: game.kills,
       level: game.level,
-      embers: earned
+      embers: earned,
+      beacons: game.beacons.filter(b => b.done).length,
+      perfectDodges: game.stats.perfectDodges || 0
     };
     meta.runs += 1;
     meta.kills += game.kills;
@@ -974,7 +988,7 @@
     bindToggle('set-colorblind', 'colorblind');
     bindToggle('set-hudsize', 'hudLarge', on => document.body.classList.toggle('hud-large', on));
     bindToggle('set-music', 'dynamicMusic', on => {
-      if (!on) AudioFX.setCombatLevel(0);
+      if (!on) { AudioFX.setCombatLevel(0); AudioFX.setBossMusic(false); }
     });
 
     document.querySelectorAll('#set-quality button').forEach(b => {
@@ -1068,6 +1082,22 @@
      输入
      ========================================================= */
   function bindInput() {
+    canvas.addEventListener('pointerdown', e => {
+      if (state !== 'playing' || e.pointerType === 'touch' || e.button !== 0) return;
+      if (input.pointer.active) return;
+      input.pointer = { x: e.clientX, y: e.clientY, active: true, id: e.pointerId };
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!input.pointer.active || e.pointerId !== input.pointer.id) return;
+      input.pointer.x = e.clientX; input.pointer.y = e.clientY;
+    });
+    const releaseAim = e => {
+      if (e.pointerId === input.pointer.id) input.pointer.active = false;
+    };
+    window.addEventListener('pointerup', releaseAim);
+    canvas.addEventListener('pointercancel', releaseAim);
+    canvas.addEventListener('lostpointercapture', releaseAim);
     window.addEventListener('keydown', e => {
       const code = e.code;
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(code) >= 0) e.preventDefault();
@@ -1108,6 +1138,8 @@
 
     window.addEventListener('blur', () => {
       input.keys = Object.create(null);
+      input.pointer.active = false;
+      input.dashQueued = false;
       resetJoy();
       if (window.__noAutoPause) return;
       if (state === 'playing') togglePause();
@@ -1181,6 +1213,11 @@
   let joyPointer = null;
 
   function resetJoy() {
+    const pointer = joyPointer;
+    joyPointer = null;
+    if (pointer !== null && joyBase) {
+      try { joyBase.releasePointerCapture(pointer); } catch (err) {}
+    }
     input.joy.active = false;
     input.joy.x = 0;
     input.joy.y = 0;
@@ -1222,7 +1259,7 @@
       setJoy(e);
     });
     joyBase.addEventListener('pointermove', e => {
-      if (e.pointerId !== joyPointer) return;
+      if (state !== 'playing' || e.pointerId !== joyPointer) return;
       e.preventDefault();
       setJoy(e);
     });
@@ -1246,9 +1283,31 @@
     touchDash.addEventListener('pointercancel', releaseDash);
   }
 
+  function renderPauseBuild() {
+    const g = game, p = g.player;
+    const evo = EVOLUTIONS[p.weapon];
+    const summary = Nightwatch.loadout(p, g.level, Upgrades.BY_ID, evo);
+    $('pause-weapon').textContent = p.weaponName;
+    $('pause-build').innerHTML = summary.items.length ? summary.items.map(item =>
+      '<span class="loadout-chip">' + item.name + '<b>' + item.level + ' / ' + item.max + '</b></span>').join('') :
+      '<span class="loadout-empty">尚未获得强化 · 击杀敌人收集经验</span>';
+    const route = summary.evolution;
+    $('pause-evolution').textContent = route.done ? '已进化 · ' + route.name : route.ready ?
+      '进化已就绪 · 下次升级可选择「' + route.name + '」' :
+      '进化 → ' + route.name + '：等级 ' + route.currentLevel + '/' + route.requiredLevel +
+      ' · ' + evo.need.name + ' ' + route.currentUpgrade + '/' + route.requiredUpgrade;
+    $('pause-evolution').classList.toggle('ready', route.done || route.ready);
+    $('pause-objectives').textContent = '灯塔 ' + g.beacons.filter(b => b.done).length + '/3 · 精准闪避 ' + (g.stats.perfectDodges || 0) + ' 次';
+  }
+
   function togglePause() {
     if (state === 'playing') {
       state = 'paused';
+      input.keys = Object.create(null);
+      input.pointer.active = false;
+      input.dashQueued = false;
+      AudioFX.setPaused(true);
+      renderPauseBuild();
       resetJoy();
       pauseScreen.classList.remove('hidden');
       $('pause-time').textContent = fmtTime(game.t);
@@ -1257,6 +1316,8 @@
       AudioFX.hover();
     } else if (state === 'paused') {
       state = 'playing';
+      AudioFX.resume();
+      AudioFX.setPaused(false);
       pauseScreen.classList.add('hidden');
       lastTime = performance.now();
       AudioFX.hover();
@@ -1288,7 +1349,7 @@
   }
 
   function shakeAmount(g) {
-    if (!settings.shake) return 0;
+    if (!settings.shake || state === 'paused' || state === 'levelup') return 0;
     const k = settings.reduceMotion ? 0.22 : 1;
     return g.trauma * g.trauma * 20 * k;
   }
@@ -1371,6 +1432,8 @@
     g.t += dt;
     if (g.freezeT > 0) g.freezeT = Math.max(0, g.freezeT - dtReal);
     updateMusic(dtReal);
+    Atmosphere.update(g.atmosphere, dt, { width: W, height: H, low: qualityLow, reduceMotion: settings.reduceMotion });
+    p.focusT = Math.max(0, p.focusT - dt);
 
     if (g.t >= 300) unlockAch('survivor_5');
     updateLowHp(dt);
@@ -1384,6 +1447,7 @@
     if (g.comboT > 0) { g.comboT -= dt; if (g.comboT <= 0) g.combo = 0; }
 
     updatePlayer(dt);
+    updateBeacons(dt);
     updateSpawning(dt);
     updateEnemies(dt);
     g.grid = buildGrid();
@@ -1415,6 +1479,22 @@
     if (g.pendingLevels > 0 && g.levelupDelay <= 0 && state === 'playing') openLevelUp();
   }
 
+  // 灯塔：停留八秒点亮，离开保留进度，每座只奖励一次
+  function updateBeacons(dt) {
+    const g = game, p = g.player;
+    for (const b of g.beacons) {
+      if (!Nightwatch.chargeBeacon(b, p, dt)) continue;
+      const before = p.hp;
+      p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.2);
+      g.stats.healing += p.hp - before;
+      gainXp(g.xpNext * 0.65);
+      p.shieldCharges = Math.min(3, p.shieldCharges + 1);
+      AudioFX.beacon();
+      toast('灯塔点亮 · 经验 / 治疗 / 护盾');
+      addParticle({ type: 'ring', x: b.x, y: b.y, vx: 0, vy: 0, life: 1, max: 1, size: 220, color: '#ffd97a', add: true, width: 3 });
+    }
+  }
+
   // 动态音乐：根据场上压力调整打击乐层
   function updateMusic(dtReal) {
     const g = game;
@@ -1422,7 +1502,7 @@
     g.musicTimer = (g.musicTimer || 0) - dtReal;
     if (g.musicTimer > 0) return;
     g.musicTimer = 0.5;
-    if (!settings.dynamicMusic) { AudioFX.setCombatLevel(0); return; }
+    if (!settings.dynamicMusic) { AudioFX.setCombatLevel(0); AudioFX.setBossMusic(false); return; }
     const threat = clamp(
       g.enemies.length / 70 * 0.62 +
       (g.boss && !g.boss.dead ? 0.42 : 0) +
@@ -1458,6 +1538,7 @@
   /* ---------------- 玩家 ---------------- */
   function updatePlayer(dt) {
     const g = game, p = g.player;
+    p.frameX = p.x; p.frameY = p.y;
 
     // 移动输入
     let mx = 0, my = 0;
@@ -1524,7 +1605,13 @@
       if (p.afterimages[i].life <= 0) p.afterimages.splice(i, 1);
     }
 
-    // 瞄准：最近敌人
+    p.footstepT -= dt;
+    if (moving && p.dashT <= 0 && p.footstepT <= 0) {
+      p.footstepT = 0.32;
+      AudioFX.footstep();
+    }
+
+    // 瞄准：最近敌人；按住鼠标时临时覆盖
     let best = null, bestD = Infinity;
     const range2 = 640 * 640;
     for (const e of g.enemies) {
@@ -1534,8 +1621,12 @@
       if (d2 < bestD) { bestD = d2; best = e; }
     }
     if (g.boss && !g.boss.dead) best = g.boss;
-    p.hasTarget = !!best;
-    if (best) {
+    const directed = input.pointer.active;
+    p.hasTarget = directed || !!best;
+    if (directed) {
+      const target = Nightwatch.pointerWorld(input.pointer.x, input.pointer.y, canvas.getBoundingClientRect(), g.camera, zoom);
+      p.aim = Math.atan2(target.y - p.y, target.x - p.x);
+    } else if (best) {
       const targetA = Math.atan2(best.y - p.y, best.x - p.x);
       p.aim = angleLerp(p.aim, targetA, Math.min(1, dt * 14));
     } else if (moving) {
@@ -1543,7 +1634,7 @@
     }
 
     // 射击
-    const interval = p.baseInterval / p.fireRateMult;
+    const interval = p.baseInterval / (p.fireRateMult * (p.focusT > 0 ? 1.25 : 1));
     p.fireTimer -= dt;
     if (p.hasTarget && p.fireTimer <= 0 && !p.dead) {
       p.fireTimer = interval;
@@ -1566,6 +1657,7 @@
     p.dashDirX = dx / l;
     p.dashDirY = dy / l;
     p.dashT = 0.16;
+    p.dodgeRewarded = false;
     p.dashCd = p.dashCdMax * p.dashCdMult;
     p.invuln = Math.max(p.invuln, 0.34);
     g.stats.dashes++;
@@ -1675,7 +1767,7 @@
     p.recoil = wpn.recoil;
     p.muzzle = 0.06 * wpn.muzzle;
     g.stats.shots += count;
-    AudioFX.shot(0);
+    AudioFX.shot(0, p.weapon);
     g.trauma = Math.min(1, g.trauma + 0.02 + 0.014 * wpn.recoil);
 
     // 枪口粒子
@@ -2520,12 +2612,21 @@
     const edt = g.freezeT > 0 ? dt * 0.12 : dt;
     for (let i = g.ebullets.length - 1; i >= 0; i--) {
       const b = g.ebullets[i];
+      b.px = b.x; b.py = b.y;
       b.x += b.vx * edt;
       b.y += b.vy * edt;
       b.life -= edt;
       if (b.life <= 0 || Math.hypot(b.x, b.y) > ARENA_R + 40) {
         g.ebullets.splice(i, 1);
         continue;
+      }
+      if (Nightwatch.nearMiss(p, b)) {
+        p.focusT = 2;
+        p.dashCd = Math.max(0, p.dashCd - 0.6);
+        g.stats.perfectDodges = (g.stats.perfectDodges || 0) + 1;
+        AudioFX.perfectDodge();
+        toast('精准闪避 · 冷却 -0.6s / 射速 +25%');
+        addParticle({ type: 'ring', x: p.x, y: p.y, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 105, color: '#a8e4ff', add: true, width: 2 });
       }
       if (dist2(b.x, b.y, p.x, p.y) < (b.r + p.r) * (b.r + p.r)) {
         if (p.invuln <= 0 && p.dashT <= 0) damagePlayer(b.damage, b);
@@ -3067,6 +3168,10 @@
     if (state !== 'playing' || game.pendingLevels <= 0) return;
     game.pendingLevels--;
     state = 'levelup';
+    input.pointer.active = false;
+    input.keys = Object.create(null);
+    input.dashQueued = false;
+    resetJoy();
     game.offers = Upgrades.roll(game.player, 3, game.rng);
     const evo = evolutionFor(game.player);
     if (evo) game.offers[2] = evolutionCard(evo);
@@ -3246,6 +3351,8 @@
 
     drawLighting(g);
     drawGlowPass(g);
+    Atmosphere.drawWeather(ctx, g.atmosphere, { width: W, height: H, low: qualityLow, reduceMotion: settings.reduceMotion, time: g.t });
+    drawAimReticle(g);
     drawIndicators(g);
     drawFreezeOverlay(g);
     drawRadar(g);
@@ -3302,6 +3409,11 @@
   function drawWorld(g) {
     const cam = g.camera;
     drawGroundLayer(cam.x, cam.y, g.t / g.duration);
+    Atmosphere.drawPuddles(ctx, g.atmosphere, { cameraX: cam.x, cameraY: cam.y, width: W, height: H, zoom, time: g.t, low: qualityLow, reduceMotion: settings.reduceMotion });
+    for (const b of g.beacons) {
+      if (Atmosphere.beaconVisible(b, { cameraX: cam.x, cameraY: cam.y, width: W, height: H, zoom }))
+        Atmosphere.drawBeacon(ctx, b, g.t, settings.reduceMotion);
+    }
     drawDecals(g);
     drawDecorations(cam.x, cam.y);
     drawRitualCircle();
@@ -4291,6 +4403,7 @@
       for (const b of g.ebullets) {
         hole(b.x, b.y, 60, 0.5);
       }
+      for (const b of g.beacons) hole(b.x, b.y, b.done ? 200 : 160, b.done ? 0.8 : 0.6);
       for (const e of g.enemies) {
         if (e.boss) hole(e.x, e.y, 220, 0.55);
         else if (e.elite) hole(e.x, e.y, 80, 0.45);
@@ -4466,6 +4579,9 @@
       list.push({ x: it.x, y: it.y, color: '#ff8aa0', label: '+', size: 8, kind: 'heart' });
     }
 
+    const beacon = g.beacons.filter(b => !b.done).sort((a, b) => dist2(g.player.x, g.player.y, a.x, a.y) - dist2(g.player.x, g.player.y, b.x, b.y))[0];
+    if (beacon) list.push({ x: beacon.x, y: beacon.y, color: '#ffe3a0', label: '灯', size: 9, kind: 'beacon' });
+
     const placed = [];
     let eliteCount = 0, heartCount = 0;
 
@@ -4531,6 +4647,22 @@
         ctx.restore();
       }
     }
+  }
+
+  function drawAimReticle(g) {
+    if (!input.pointer.active || g.player.dead) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (input.pointer.x - rect.left) * W / rect.width;
+    const y = (input.pointer.y - rect.top) * H / rect.height;
+    ctx.save();
+    ctx.strokeStyle = '#ffe3a0'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, 10, 0, TAU); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 17, y); ctx.lineTo(x - 6, y);
+    ctx.moveTo(x + 6, y); ctx.lineTo(x + 17, y);
+    ctx.moveTo(x, y - 17); ctx.lineTo(x, y - 6);
+    ctx.moveTo(x, y + 6); ctx.lineTo(x, y + 17); ctx.stroke();
+    ctx.restore();
   }
 
   // 战术雷达：竞技场全貌、敌人分布、Boss 与掉落
@@ -4618,6 +4750,14 @@
       const x = cx + it.x * scale, y = cy + it.y * scale;
       ctx.fillStyle = (it.kind || 'heart') === 'heart' ? '#ff6b8a' : '#8ce8ff';
       ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+    }
+
+    // 灯塔：空心方框与点亮的实心方框，形状区别于敌人
+    ctx.strokeStyle = '#ffe3a0'; ctx.fillStyle = '#ffe3a0'; ctx.lineWidth = 1;
+    for (const b of g.beacons) {
+      const x = cx + b.x * scale, y = cy + b.y * scale;
+      if (b.done) ctx.fillRect(x - 2, y - 2, 4, 4);
+      else ctx.strokeRect(x - 2.5, y - 2.5, 5, 5);
     }
 
     // 扫描线
@@ -4767,6 +4907,13 @@
       }
     }
 
+    const completed = g.beacons.filter(b => b.done).length;
+    const nearest = g.beacons.filter(b => !b.done).sort((a, b) => dist2(p.x, p.y, a.x, a.y) - dist2(p.x, p.y, b.x, b.y))[0];
+    $('hud-objective').textContent = nearest ?
+      '◇ 灯塔 ' + completed + '/3 · ' + (Math.hypot(p.x - nearest.x, p.y - nearest.y) <= nearest.radius ?
+        '充能 ' + Math.floor(nearest.charge * 100) + '% · 保持圈内' :
+        Math.round(Math.hypot(p.x - nearest.x, p.y - nearest.y)) + 'm · 圈内停留 8s') : '◆ 三座灯塔已点亮';
+    $('hud-aim').textContent = p.focusT > 0 ? '精准闪避 · 射速提升' : input.pointer.active ? '定向瞄准' : '自动瞄准';
     const remaining = Math.max(0, g.duration - g.t);
     $('hud-time').textContent = fmtTime(remaining);
     $('hud-time').classList.toggle('danger', remaining <= 60);
