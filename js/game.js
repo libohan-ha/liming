@@ -1570,8 +1570,8 @@
       p.vx = p.dashDirX * sp;
       p.vy = p.dashDirY * sp;
       // 残影
-      if (Math.random() < 0.7) {
-        p.afterimages.push({ x: p.x, y: p.y, a: p.aim, life: 0.28, max: 0.28 });
+      if (!settings.reduceMotion && p.afterimages.length < 12 && Math.random() < 0.7) {
+        p.afterimages.push({ x: p.x, y: p.y, a: p.aim, life: 0.28, max: 0.28, pose: Character.capture(p, g.t, { reduceMotion: settings.reduceMotion }) });
       }
       if (Math.random() < 0.8) {
         addParticle({
@@ -1661,7 +1661,9 @@
     p.dashCd = p.dashCdMax * p.dashCdMult;
     p.invuln = Math.max(p.invuln, 0.34);
     g.stats.dashes++;
-    p.afterimages.push({ x: p.x, y: p.y, a: p.aim, life: 0.3, max: 0.3 });
+    if (!settings.reduceMotion && p.afterimages.length < 12) {
+      p.afterimages.push({ x: p.x, y: p.y, a: p.aim, life: 0.3, max: 0.3, pose: Character.capture(p, g.t, { reduceMotion: settings.reduceMotion }) });
+    }
     g.trauma = Math.min(1, g.trauma + 0.16);
     AudioFX.dash();
     for (let i = 0; i < 14; i++) {
@@ -3856,214 +3858,18 @@
     const p = g.player;
     if (p.dead) return;
 
-    // 冲刺残影
-    for (const a of p.afterimages) {
-      const k = a.life / a.max;
-      ctx.save();
-      ctx.globalAlpha = k * 0.35;
-      ctx.translate(a.x, a.y);
-      ctx.rotate(a.a);
-      ctx.fillStyle = '#7fd0e8';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 13, 10, 0, 0, TAU);
-      ctx.fill();
-      ctx.restore();
+    const visual = { reduceMotion: settings.reduceMotion, highContrast: settings.highContrast, low: qualityLow };
+    if (!settings.reduceMotion) {
+      for (const a of p.afterimages) Character.drawGhost(ctx, a, p, visual);
     }
-
-    const speed = Math.hypot(p.vx, p.vy);
-    const moving = speed > 20;
-    const moveA = moving ? Math.atan2(p.vy, p.vx) : p.aim + Math.PI;
-    const bob = moving ? Math.sin(p.walkPhase) * 1.6 : Math.sin(g.t * 2.2) * 0.8;
-
-    ctx.save();
-    ctx.translate(p.x, p.y + bob);
-
-    // 斗篷（朝移动反方向飘）
-    ctx.save();
-    ctx.rotate(moveA);
-    const flutter = Math.sin(g.t * 6 + p.walkPhase) * 2.6;
-    const cg = ctx.createLinearGradient(6, 0, -30, 0);
-    cg.addColorStop(0, '#2d5a66');
-    cg.addColorStop(0.45, '#183a43');
-    cg.addColorStop(1, '#08181d');
-    ctx.fillStyle = cg;
-    ctx.beginPath();
-    ctx.moveTo(3, -9);
-    ctx.quadraticCurveTo(-12, -16 + flutter, -28, -7 + flutter);
-    ctx.quadraticCurveTo(-20, 0, -25, 11 - flutter);
-    ctx.quadraticCurveTo(-10, 14, 3, 9);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(120,200,220,.16)';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-    ctx.restore();
-
-    // 靴子
-    const step = moving ? Math.sin(p.walkPhase) * 3.2 : 0;
-    ctx.fillStyle = '#0c1a1f';
-    ctx.beginPath(); ctx.ellipse(-5, 11 + step, 4, 5.5, 0.2, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(5, 11 - step, 4, 5.5, -0.2, 0, TAU); ctx.fill();
-
-    // 身体
-    const bg = ctx.createRadialGradient(-3, -2, 2, 0, 2, 15);
-    bg.addColorStop(0, '#35636f');
-    bg.addColorStop(0.55, '#1c414b');
-    bg.addColorStop(1, '#0a2027');
-    ctx.fillStyle = bg;
-    ctx.beginPath();
-    ctx.ellipse(0, 2, 10.5, 12.5, 0, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(4,10,12,.8)';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-
-    // 围巾
-    ctx.strokeStyle = '#a87b42';
-    ctx.lineWidth = 2.6;
-    ctx.beginPath();
-    ctx.moveTo(-7, -4);
-    ctx.quadraticCurveTo(0, -1, 7, -4);
-    ctx.stroke();
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.moveTo(6, -3);
-    ctx.quadraticCurveTo(11, 2, 9, 8);
-    ctx.stroke();
-
-    // 持枪手臂
-    ctx.save();
-    ctx.rotate(p.aim);
-    const rec = p.recoil * 2.6;
-    // 袖子
-    ctx.strokeStyle = '#214a55';
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(1, 1.5);
-    ctx.lineTo(12 - rec, 0);
-    ctx.stroke();
-    // 手套
-    ctx.fillStyle = '#0c1e24';
-    ctx.beginPath();
-    ctx.arc(13 - rec, 0, 3.4, 0, TAU);
-    ctx.fill();
-    // 枪身
-    ctx.fillStyle = '#3a2a1e';
-    ctx.fillRect(12 - rec, -2.4, 8, 4.8);
-    // 枪管
-    const gg = ctx.createLinearGradient(18, -2.2, 33, 2.2);
-    gg.addColorStop(0, '#7d8b8e');
-    gg.addColorStop(0.35, '#c3cfd0');
-    gg.addColorStop(0.55, '#5d6b6f');
-    gg.addColorStop(1, '#20282b');
-    ctx.fillStyle = gg;
-    ctx.fillRect(18 - rec, -2.2, 15, 4.4);
-    // 高光
-    ctx.fillStyle = 'rgba(230,245,250,.35)';
-    ctx.fillRect(18.5 - rec, -1.9, 12, 1);
-    // 枪口
-    ctx.fillStyle = '#12181a';
-    ctx.fillRect(32 - rec, -2.7, 3, 5.4);
-    // 扳机护圈
-    ctx.strokeStyle = '#2a3438';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(16 - rec, 3, 3, 0, Math.PI);
-    ctx.stroke();
-    // 枪口闪光
-    if (p.muzzle > 0) {
-      const k = p.muzzle / 0.06;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.translate(36 - rec, 0);
-      ctx.globalAlpha = k;
-      const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, 16);
-      fg.addColorStop(0, 'rgba(255,255,235,1)');
-      fg.addColorStop(0.3, 'rgba(255,210,130,.9)');
-      fg.addColorStop(1, 'rgba(255,160,60,0)');
-      ctx.fillStyle = fg;
-      ctx.beginPath();
-      ctx.arc(0, 0, 16, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = '#fff6dc';
-      ctx.beginPath();
-      ctx.moveTo(0, -4.5); ctx.lineTo(12, 0); ctx.lineTo(0, 4.5); ctx.lineTo(3.5, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
-    ctx.restore();
-
-    // 灯笼
-    const swing = Math.sin(p.lanternPhase) * 0.22;
-    const lx = -10 + Math.sin(p.lanternPhase * 0.7) * 1.4;
-    const ly = 4 + Math.cos(p.lanternPhase) * 1.2;
-    ctx.save();
-    ctx.translate(lx, ly);
-    ctx.rotate(swing);
-    ctx.strokeStyle = '#6b5636';
-    ctx.lineWidth = 1.1;
-    ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(0, -2.5); ctx.stroke();
-    ctx.strokeStyle = '#8a6a3f';
-    ctx.beginPath(); ctx.arc(0, -2.6, 3.4, Math.PI, 0); ctx.stroke();
-    ctx.fillStyle = '#2a2018';
-    ctx.fillRect(-3.6, -0.5, 7.2, 8.4);
-    const lg = ctx.createLinearGradient(0, 0, 0, 7);
-    lg.addColorStop(0, '#fff0c8');
-    lg.addColorStop(0.5, '#ffc46e');
-    lg.addColorStop(1, '#c26a2a');
-    ctx.fillStyle = lg;
-    ctx.fillRect(-2.3, 0.7, 4.6, 6);
-    ctx.strokeStyle = '#c9a86a';
-    ctx.lineWidth = 0.9;
-    ctx.strokeRect(-3.6, -0.5, 7.2, 8.4);
-    ctx.beginPath(); ctx.moveTo(0, -0.5); ctx.lineTo(0, 7.9); ctx.stroke();
-    ctx.fillStyle = '#5a4a32';
-    ctx.fillRect(-4.3, -1.8, 8.6, 1.5);
-    ctx.fillRect(-4.3, 7.6, 8.6, 1.4);
-    ctx.restore();
-
-    // 帽子
-    const hg = ctx.createRadialGradient(-4, -11, 2, 0, -7, 18);
-    hg.addColorStop(0, '#2c4b54');
-    hg.addColorStop(0.65, '#16313a');
-    hg.addColorStop(1, '#08181d');
-    ctx.fillStyle = hg;
-    ctx.beginPath();
-    ctx.ellipse(0, -6.5, 16, 8.8, 0, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(4,10,12,.85)';
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(-8.2, -8);
-    ctx.quadraticCurveTo(-6.5, -16.5, 0, -18);
-    ctx.quadraticCurveTo(6.5, -16.5, 8.2, -8);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = '#7a5a30';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.ellipse(0, -8.8, 7.8, 2.5, 0, 0, TAU);
-    ctx.stroke();
-    ctx.fillStyle = '#d9b46a';
-    ctx.fillRect(-1.2, -10.2, 2.4, 2.2);
-    ctx.strokeStyle = 'rgba(168,220,255,.32)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.ellipse(0, -6.5, 15.4, 8.3, 0, Math.PI * 1.05, Math.PI * 1.68);
-    ctx.stroke();
-
-    ctx.restore();
+    Character.draw(ctx, p, g.t, visual);
 
     // 守夜护盾（拾取物）
     if (p.shieldCharges > 0) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       for (let k = 0; k < p.shieldCharges; k++) {
-        const pulse = 0.2 + Math.sin(g.t * 3 + k * 1.7) * 0.06;
+        const pulse = settings.reduceMotion ? 0.2 : 0.2 + Math.sin(g.t * 3 + k * 1.7) * 0.06;
         ctx.globalAlpha = pulse;
         ctx.strokeStyle = '#8ce8ff';
         ctx.lineWidth = 1.5;
@@ -4083,7 +3889,7 @@
     if (p.invuln > 0) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.16 + Math.sin(g.t * 18) * 0.06;
+      ctx.globalAlpha = settings.reduceMotion ? 0.16 : 0.16 + Math.sin(g.t * 18) * 0.06;
       ctx.strokeStyle = '#a8dcff';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
@@ -4457,9 +4263,9 @@
 
     const p = g.player;
     if (!p.dead) {
-      // 灯笼光点
-      const lx = p.x - 11 + Math.sin(p.lanternPhase * 0.7) * 2;
-      const ly = p.y + 3 + Math.cos(p.lanternPhase) * 1.5;
+      // 光点与人物部件共用姿态，转身和后坐时仍贴合灯罩及枪口。
+      const anchors = Character.anchors(p, g.t, { reduceMotion: settings.reduceMotion });
+      const lx = anchors.lantern.x, ly = anchors.lantern.y;
       const grd = ctx.createRadialGradient(lx, ly, 0, lx, ly, 30);
       grd.addColorStop(0, 'rgba(255,240,200,.6)');
       grd.addColorStop(0.25, 'rgba(255,190,110,.28)');
@@ -4467,11 +4273,11 @@
       ctx.fillStyle = grd;
       ctx.beginPath(); ctx.arc(lx, ly, 30, 0, TAU); ctx.fill();
       // 枪口
-      if (p.muzzle > 0) {
-        const mx = p.x + Math.cos(p.aim) * 38, my = p.y + Math.sin(p.aim) * 38;
+      if (anchors.muzzleAlpha > 0) {
+        const mx = anchors.muzzle.x, my = anchors.muzzle.y;
         const mg = ctx.createRadialGradient(mx, my, 0, mx, my, 40);
-        mg.addColorStop(0, 'rgba(255,255,240,1)');
-        mg.addColorStop(0.4, 'rgba(255,210,130,.5)');
+        mg.addColorStop(0, 'rgba(255,255,240,' + anchors.muzzleAlpha + ')');
+        mg.addColorStop(0.4, 'rgba(255,210,130,' + (0.5 * anchors.muzzleAlpha) + ')');
         mg.addColorStop(1, 'rgba(255,160,60,0)');
         ctx.fillStyle = mg;
         ctx.beginPath(); ctx.arc(mx, my, 40, 0, TAU); ctx.fill();

@@ -8,7 +8,8 @@ const vm = require('node:vm');
 
 function boot() {
   const gradients = () => ({ addColorStop() {} });
-  const context = new Proxy({ createRadialGradient: gradients, createLinearGradient: gradients,
+  const radialCalls = [];
+  const context = new Proxy({ createRadialGradient: (...args) => { radialCalls.push(args); return gradients(); }, createLinearGradient: gradients,
     createPattern: () => ({}), measureText: () => ({ width: 40 }),
     getImageData: () => ({ data: new Uint8ClampedArray(512 * 512 * 4) }) },
   { get: (o, k) => k in o ? o[k] : () => {} });
@@ -38,6 +39,14 @@ function boot() {
     requestAnimationFrame() {}, setTimeout: fn => { timers.push(fn); }, setInterval() {}, clearInterval() {},
     Uint8ClampedArray, Path2D: function () {} };
   vm.createContext(box);
+  const characterCalls = [];
+  const characterPath = path.join(__dirname, '../js/character.js');
+  if (fs.existsSync(characterPath)) vm.runInContext(fs.readFileSync(characterPath, 'utf8'), box);
+  box.Character = { ...window.Character };
+  for (const name of ['init', 'draw', 'drawGhost']) {
+    const original = box.Character[name];
+    if (original) box.Character[name] = (...args) => { characterCalls.push({ name, args }); return original(...args); };
+  }
   for (const file of ['art', 'audio', 'upgrades', 'nightwatch', 'atmosphere']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/' + file + '.js'), 'utf8'), box);
     box[file === 'audio' ? 'AudioFX' : file.charAt(0).toUpperCase() + file.slice(1)] = window[file === 'audio' ? 'AudioFX' : file.charAt(0).toUpperCase() + file.slice(1)];
@@ -49,7 +58,7 @@ function boot() {
   }
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/game.js'), 'utf8'), box);
   const key = (code, up = false) => (events[up ? 'keyup' : 'keydown'] || []).forEach(fn => fn({ code, preventDefault() {}, repeat: false }));
-  return { api: window.__game, nodes, key, storage, audioCalls };
+  return { api: window.__game, nodes, key, storage, audioCalls, characterCalls, radialCalls };
 }
 
 test('offline entrypoint references only bundled scripts and styles that exist', () => {
@@ -57,10 +66,39 @@ test('offline entrypoint references only bundled scripts and styles that exist',
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const refs = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(m => m[1]);
   assert.ok(refs.includes('js/nightwatch.js')); assert.ok(refs.includes('js/atmosphere.js'));
+  assert.ok(refs.includes('js/character.js'), 'refined character renderer must be bundled');
+  assert.ok(refs.indexOf('js/character.js') < refs.indexOf('js/art.js'), 'character must load before artwork initialization');
   for (const ref of refs) {
     assert.equal(/^(?:https?:)?\/\//.test(ref), false, 'runtime remote dependency: ' + ref);
     if (!ref.startsWith('#') && !ref.startsWith('data:')) assert.ok(fs.existsSync(path.join(root, ref)), 'missing asset: ' + ref);
   }
+});
+
+test('game renders cached refined character without modifying collision or weapon values', () => {
+  const { api, key, characterCalls } = boot(); api.start('quick', 'pistol'); api.renderOnce();
+  assert.ok(characterCalls.some(c => c.name === 'init'), 'artwork must initialize the character cache');
+  assert.ok(characterCalls.some(c => c.name === 'draw'), 'game must use the refined character drawing');
+  const p = api.g.player; assert.equal(p.r, 15); assert.equal(p.baseDamage, 16); assert.equal(p.bulletSpeed, 840);
+  const before = JSON.stringify(p); api.renderOnce(); assert.equal(JSON.stringify(p), before);
+  key('Space'); api.step(1/60, 2); key('Space', true);
+  assert.ok(p.afterimages.some(a => a.pose), 'dash must capture full character pose for ghosts');
+  assert.ok(characterCalls.some(c => c.name === 'drawGhost'), 'dash must draw full silhouette ghosts');
+});
+
+test('player glow follows mirrored lantern and recoiling muzzle and reduced motion suppresses muzzle glow', () => {
+  const { api, radialCalls } = boot(); api.start('quick', 'pistol');
+  const p = api.g.player; p.x = 123; p.y = -54; p.aim = Math.PI; p.recoil = 1; p.muzzle = 0.06;
+  api.setSetting('reduceMotion', true); radialCalls.length = 0; api.renderOnce();
+  const lantern = radialCalls.filter(a => a[5] === 30).at(-1);
+  assert.ok(lantern, 'lantern glow must remain present');
+  assert.ok(Math.abs(lantern[0] - (p.x + 10)) < 1e-8, 'left aim must mirror the lantern glow with the actual cage');
+  assert.ok(Math.abs(lantern[1] - (p.y + 14)) < 1e-8, 'glow must sit in the lantern glass');
+  assert.equal(radialCalls.some(a => a[5] === 40 && Math.abs(a[0] - p.x) < 50 && Math.abs(a[1] - p.y) < 50), false,
+    'reduced motion must suppress the independent muzzle glow too');
+  api.setSetting('reduceMotion', false); radialCalls.length = 0; api.renderOnce();
+  const muzzle = radialCalls.filter(a => a[5] === 40 && Math.abs(a[1] - p.y) < 1e-8).at(-1);
+  assert.ok(muzzle, 'normal shots must have a muzzle glow');
+  assert.ok(Math.abs(muzzle[0] - (p.x - 23.2)) < 1e-8, 'muzzle glow must align with the 24-unit barrel and axial recoil');
 });
 
 test('actual game starts, moves, auto shoots, presents upgrades and advances beyond 40 seconds', () => {

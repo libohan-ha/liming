@@ -1106,6 +1106,7 @@ window.Art = (function () {
 
   function init() {
     if (enemies) return;
+    Character.init();
     enemies = buildEnemySprites();
     auras = buildAuras();
     ground = buildGround();
