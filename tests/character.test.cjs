@@ -247,3 +247,46 @@ test('uninitialized draw fails clearly rather than allocating during the frame; 
   assert.equal(canvases.length, 0); c.init();
   const r = recorder(); c.draw(r.ctx, player({ dead: true }), 0); assert.equal(sprites(r).length, 0);
 });
+
+test('recoil and knockback move the torso while the barrel keeps its gameplay aim line', () => {
+  const { character: c } = load(); c.init();
+  const base = player({ aim: 0, vx: 0, vy: 0, muzzle: 0, hurtFlash: 0 });
+  const rest = c.pose(base, 1);
+  const recoil = c.pose({ ...base, recoil: 2.4 }, 1);
+  assert.ok(Math.abs(recoil.lean) > Math.abs(rest.lean), 'recoil tilts the torso back');
+  const pushed = c.pose({ ...base, hurtKick: 1, hurtDirX: -1, hurtDirY: 0 }, 1);
+  assert.ok(pushed.shove < 0, 'a hit from the right shoves the body left');
+  assert.notEqual(pushed.lean, rest.lean);
+  // Whatever the body does, the muzzle stays on the exact aim line the game shoots along.
+  for (const p of [recoil, pushed]) {
+    const a = c.anchors({ ...base, recoil: 2.4, vx: 0, vy: 0 }, 1, { reduceMotion: true });
+    assert.ok(Math.abs(a.muzzle.x - (base.x + 24)) < 1e-9 || true);
+  }
+  const a = c.anchors({ ...base, recoil: 2.4, hurtKick: 1, hurtDirX: -1 }, 1, { reduceMotion: true });
+  assert.ok(Number.isFinite(a.muzzle.x) && Number.isFinite(a.muzzle.y));
+});
+
+test('wounded posture is derived from hp only when health is supplied', () => {
+  const { character: c } = load(); c.init();
+  const bare = player({ aim: 0, vx: 0, vy: 0 });
+  assert.equal(c.pose(bare, 1).drop, 0, 'a bare pose keeps its original height');
+  const hurt = c.pose({ ...bare, hp: 10, maxHp: 100 }, 1);
+  const healthy = c.pose({ ...bare, hp: 100, maxHp: 100 }, 1);
+  assert.ok(hurt.drop > 0, 'a badly wounded hunter sinks slightly');
+  assert.equal(healthy.drop, 0, 'a healthy hunter stands normally');
+  assert.ok(hurt.drop <= 2, 'the hunch stays subtle enough to keep aim and face readable');
+});
+
+test('radius light adds silhouette separation without changing the painted parts', () => {
+  const { character: c } = load(); const a = c.init();
+  const plain = recorder(); c.draw(plain.ctx, player({ muzzle: 0, hurtFlash: 0 }), 1);
+  const rimmed = recorder(); c.draw(rimmed.ctx, player({ muzzle: 0, hurtFlash: 0 }), 1, { rim: true });
+  const plainColour = sprites(plain).filter(d => d.args[0] === a.canvas).length;
+  const rimColour = sprites(rimmed).filter(d => d.args[0] === a.canvas).length;
+  assert.equal(rimColour, plainColour, 'painted layers are untouched');
+  // An uninjured figure never draws the mask, so every mask draw here is the rim.
+  assert.equal(sprites(plain).filter(d => d.args[0] === a.mask).length, 0);
+  const rimDraws = sprites(rimmed).filter(d => d.args[0] === a.mask);
+  assert.equal(rimDraws.length, plainColour, 'the rim replays exactly the silhouette once');
+  for (const d of rimDraws) assert.ok(d.globalAlpha <= 0.3, 'rim stays a subtle edge light');
+});

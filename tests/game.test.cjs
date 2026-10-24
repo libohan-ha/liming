@@ -212,3 +212,43 @@ test('actual dodge rewards once, Boss appears, and both endings record new local
   api.start('quick', 'shotgun'); api.hurt(99999); api.step(1 / 60, 300); assert.equal(api.state, 'over');
   assert.equal(api.g.endWin, false);
 });
+
+test('footsteps fire on the walk cycle, not a fixed timer, and scale with real speed', () => {
+  const { api, key, audioCalls } = boot(); api.start('quick', 'pistol');
+  const p = api.g.player;
+  // Standing still must stay silent.
+  audioCalls.length = 0; api.step(1 / 60, 120);
+  assert.equal(audioCalls.filter(c => c.name === 'footstep').length, 0, 'idle hunter is silent');
+  // Walking must step, and the count must follow the stride phase rather than wall time.
+  key('KeyD'); audioCalls.length = 0;
+  const phase0 = p.walkPhase; api.step(1 / 60, 60);
+  const stepping = audioCalls.filter(c => c.name === 'footstep').length;
+  const expected = Math.floor(p.walkPhase / Math.PI) - Math.floor(phase0 / Math.PI);
+  assert.ok(stepping > 0, 'walking produces footsteps');
+  assert.equal(stepping, expected, 'one footstep per half stride');
+  key('KeyD', true);
+});
+
+test('taking a hit records the knockback direction and decays it', () => {
+  const { api } = boot(); api.start('quick', 'pistol');
+  const p = api.g.player; p.invuln = 0;
+  api.hurt(20, 'ghoul');
+  assert.equal(p.hurtKick, 1, 'hit starts a full knockback');
+  assert.ok(Number.isFinite(p.hurtDirX) && Number.isFinite(p.hurtDirY));
+  api.step(1 / 60, 60);
+  assert.ok(p.hurtKick < 1 && p.hurtKick >= 0, 'knockback decays back to rest');
+});
+
+test('a heart picked up while badly wounded also grants a brief grace window', () => {
+  const { api } = boot(); api.start('quick', 'pistol');
+  const p = api.g.player; p.hp = p.maxHp * 0.2; p.invuln = 0;
+  api.g.pickups.push({ kind: 'heart', x: p.x, y: p.y, phase: 0, life: 30 });
+  api.step(1 / 60, 2);
+  assert.ok(p.hp > p.maxHp * 0.2, 'low-health heal still restores health');
+  assert.ok(p.invuln > 0.5, 'low-health heal grants a grace window');
+  // At full health the same pickup must not hand out free invulnerability.
+  const p2 = api.g.player; p2.hp = p2.maxHp; p2.invuln = 0;
+  api.g.pickups.push({ kind: 'heart', x: p2.x, y: p2.y, phase: 0, life: 30 });
+  api.step(1 / 60, 2);
+  assert.equal(p2.invuln, 0, 'healthy pickups stay a plain heal');
+});

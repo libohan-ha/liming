@@ -461,7 +461,7 @@
       evolved: false, evoId: null,
       evoLight: false, evoFlame: false, evoHoming: false,
       shieldCharges: 0,
-      dodgeRewarded: false, focusT: 0, footstepT: 0
+      dodgeRewarded: false, focusT: 0
     };
     p.damageMult *= 1 + tl('power') * 0.03;
     p.pickupMult *= 1 + tl('magnet') * 0.06;
@@ -1465,6 +1465,7 @@
     g.hitStop = Math.max(0, g.hitStop - dtReal);
     p.invuln = Math.max(0, p.invuln - dt);
     p.hurtFlash = Math.max(0, p.hurtFlash - dtReal * 4);
+    p.hurtKick = Math.max(0, (p.hurtKick || 0) - dtReal * 3.6);
     p.muzzle = Math.max(0, p.muzzle - dtReal);
     p.recoil = Math.max(0, p.recoil - dtReal * 14);
     p.dashT = Math.max(0, p.dashT - dt);
@@ -1588,7 +1589,15 @@
       p.vy = lerp(p.vy, ty, accel);
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      if (moving) p.walkPhase += dt * 11;
+      if (moving) {
+        // Stride rate follows actual speed, so a walk and a run do not animate alike.
+        const rate = 11 * (1 + Math.min(0.35, Math.hypot(p.vx, p.vy) / 520));
+        const before = p.walkPhase;
+        p.walkPhase += dt * rate;
+        // Footstep fires when the cycle crosses each half turn: the sound lands on a
+        // planted foot instead of drifting against the animation on its own timer.
+        if (p.dashT <= 0 && Math.floor(before / Math.PI) !== Math.floor(p.walkPhase / Math.PI)) AudioFX.footstep();
+      }
     }
 
     // 边界
@@ -1603,12 +1612,6 @@
     for (let i = p.afterimages.length - 1; i >= 0; i--) {
       p.afterimages[i].life -= dt;
       if (p.afterimages[i].life <= 0) p.afterimages.splice(i, 1);
-    }
-
-    p.footstepT -= dt;
-    if (moving && p.dashT <= 0 && p.footstepT <= 0) {
-      p.footstepT = 0.32;
-      AudioFX.footstep();
     }
 
     // 瞄准：最近敌人；按住鼠标时临时覆盖
@@ -2843,6 +2846,11 @@
     g.stats.damageTaken += amount;
     p.invuln = 1.15;
     p.hurtFlash = 1;
+    // The hit physically rocks the defender; the direction comes from the actual source.
+    const hx = source && Number.isFinite(source.x) ? p.x - source.x : -Math.cos(p.aim);
+    const hy = source && Number.isFinite(source.y) ? p.y - source.y : -Math.sin(p.aim);
+    const hl = Math.hypot(hx, hy) || 1;
+    p.hurtKick = 1; p.hurtDirX = hx / hl; p.hurtDirY = hy / hl;
     g.trauma = Math.min(1, g.trauma + 0.5);
     g.hitStop = 0.05;
     AudioFX.hurt();
@@ -3028,8 +3036,16 @@
     const g = game, p = g.player;
     const kind = it.kind || 'heart';
     if (kind === 'heart') {
+      // Healing is worth more when it is scarce: below 35% it mends 30, otherwise 30 with a
+      // short grace window. The grace is the real reward — a heal that also stops the bleeding.
+      const wasLow = p.hp / p.maxHp < 0.35;
       const healed = Math.min(p.maxHp - p.hp, 30);
       p.hp = Math.min(p.maxHp, p.hp + 30);
+      if (wasLow) {
+        p.invuln = Math.max(p.invuln, 0.9);
+        toast('生命 +30 · 短暂无伤');
+        addParticle({ type: 'ring', x: p.x, y: p.y, vx: 0, vy: 0, life: 0.7, max: 0.7, size: 96, color: '#ffd9a0', add: true, width: 3 });
+      }
       g.stats.healing += healed;
       AudioFX.heal();
       toast('生命 +30');
@@ -3858,7 +3874,7 @@
     const p = g.player;
     if (p.dead) return;
 
-    const visual = { reduceMotion: settings.reduceMotion, highContrast: settings.highContrast, low: qualityLow };
+    const visual = { reduceMotion: settings.reduceMotion, highContrast: settings.highContrast, low: qualityLow, rim: !qualityLow };
     if (!settings.reduceMotion) {
       for (const a of p.afterimages) Character.drawGhost(ctx, a, p, visual);
     }
@@ -4272,6 +4288,18 @@
       grd.addColorStop(1, 'rgba(255,150,60,0)');
       ctx.fillStyle = grd;
       ctx.beginPath(); ctx.arc(lx, ly, 30, 0, TAU); ctx.fill();
+      // The lantern hangs at hip height, so it never lights the boots. A separate soft
+      // pool at the feet keeps the legs and stride readable in near-dark. Skipped on low
+      // quality, where the extra composite pass costs more than the detail it adds.
+      if (!qualityLow) {
+        const fx = p.x, fy = p.y + 22;
+        const fg = ctx.createRadialGradient(fx, fy, 0, fx, fy, 26);
+        fg.addColorStop(0, 'rgba(196,222,236,.20)');
+        fg.addColorStop(0.45, 'rgba(150,182,200,.09)');
+        fg.addColorStop(1, 'rgba(120,150,170,0)');
+        ctx.fillStyle = fg;
+        ctx.beginPath(); ctx.ellipse(fx, fy, 26, 15, 0, 0, TAU); ctx.fill();
+      }
       // 枪口
       if (anchors.muzzleAlpha > 0) {
         const mx = anchors.muzzle.x, my = anchors.muzzle.y;
