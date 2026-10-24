@@ -131,6 +131,27 @@ test('pose chooses eight directions, remains pure, and articulates alternating b
   assert.deepEqual(json(captured), json(c.capture(p, 2)));
 });
 
+test('new ranger silhouette parts and stance animation remain visible at normal scale', () => {
+  const { character: c } = load(); const a = c.init();
+  for (const name of ['hat-feather', 'coat-pin', 'knee-guard', 'heel']) {
+    assert.ok(a.parts[name], name + ' is a distinct cached silhouette part');
+  }
+  const idleA = c.pose(player({ vx: 0, vy: 0 }), 0);
+  const idleB = c.pose(player({ vx: 0, vy: 0 }), Math.PI / 2);
+  const moving = c.pose(player({ vx: 180, vy: 40 }), 1.2);
+  const dash = c.pose(player({ dashT: 0.16, dashDirX: 1, dashDirY: 0 }), 1.2);
+  assert.notEqual(idleA.breath, idleB.breath, 'breathing changes the resting silhouette');
+  assert.ok(Math.abs(moving.stance) > 0, 'moving stance separates shoulders from hips');
+  assert.ok(dash.crouch > 0 && dash.stance < 0, 'dash lowers and commits the body');
+  assert.ok(Math.abs(moving.brace) > 0, 'weapon brace follows the moving stance');
+  const r = recorder(); c.draw(r.ctx, player({ vx: 180, vy: 40 }), 1.2);
+  const draws = sprites(r);
+  for (const name of ['hat-feather', 'coat-pin', 'knee-guard', 'heel']) {
+    const part = a.parts[name];
+    assert.ok(draws.some(d => d.args[0] === a.canvas && d.args[1] === part.x * 3 && d.args[2] === part.y * 3), name + ' is composited in the figure');
+  }
+});
+
 test('reduceMotion makes all time-dependent pose and rendering static while keeping exact aim', () => {
   const { character: c } = load(); c.init(); const p = player({ dashT: 0.1 });
   const options = { reduceMotion: true };

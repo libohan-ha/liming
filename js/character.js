@@ -45,6 +45,36 @@ window.Character = (function () {
     line(c, '#e6c88e', 0.36, `M${x + w * 0.5} ${y} L${x + w * 0.5} ${y + h}`);
   }
 
+  function hatFeather(c) {
+    // A broken quill gives the hunter a readable asymmetrical profile at 1x.
+    paint(c, grad(c, 0, -2, 5, -12, ['#d9e7e5', '#78909a', '#273945']),
+      'M0 1 C1 -3 0 -8 3 -12 C5 -10 7 -7 6 -4 C5 -1 3 1 0 1 Z', INK, 0.55);
+    line(c, '#c5d9d8', 0.35, 'M1 -0.2 C3 -4 4 -8 4 -10');
+    line(c, '#516a75', 0.3, 'M2 -3 L5 -5 M2.8 -5.2 L5.2 -7.2 M3.5 -7.4 L5 -9');
+  }
+
+  function coatPin(c) {
+    // A small compass pin anchors the chest and adds a warm identity mark.
+    paint(c, '#423a2b', 'M0 -2 L3 1 L0 5 L-3 1 Z', INK, 0.55);
+    paint(c, '#d8b76e', 'M0 -1.2 L1.8 1 L0 3.1 L-1.8 1 Z', '#6d5431', 0.35);
+    line(c, '#fff0b7', 0.3, 'M0 -0.6 L0 2.6 M-1.3 1 L1.3 1');
+  }
+
+  function kneeGuard(c) {
+    // A separate curved knee plate makes the stride read as a joint, not a tube.
+    paint(c, grad(c, -3, 0, 3, 4, ['#8da4ae', '#4c6471', '#263b49']),
+      'M-3 0 C-1 -1 2 -1 3 0 L2.5 4 C1 5 -1 5 -2.5 4 Z', INK, 0.55);
+    line(c, '#bfd1d5', 0.35, 'M-1.8 0.5 C0 1.3 1.5 1.3 2.2 0.5');
+    line(c, '#263a48', 0.4, 'M-1.8 3.4 C0 4 1.3 4 2 3.3');
+  }
+
+  function heel(c) {
+    // The raised heel and tread interrupt the boot's long vertical silhouette.
+    paint(c, '#242f36', 'M-3 0 L2 0 L3 3 L5 4 L4.5 6 L-3 6 Z', INK, 0.5);
+    line(c, '#bdcdd0', 0.35, 'M-2.4 1 L1.7 1.1 M-2.5 4.8 L4 5');
+    line(c, '#7d6249', 0.3, 'M1.6 2 L2.4 3 M0 2 L0.8 3');
+  }
+
   function torso(c, view) {
     const front = view !== 'back' && view !== 'rearquarter';
     const narrow = view === 'side';
@@ -444,6 +474,10 @@ window.Character = (function () {
     add('glove', -3, -3, 10, 11, c => glove(c, false));
     add('support-glove', -5, -3, 11, 10, c => glove(c, true));
     add('idle-arm', -7, -3, 12, 20, idleArm);
+    add('hat-feather', -2, -14, 10, 16, hatFeather);
+    add('coat-pin', -4, -4, 8, 11, coatPin);
+    add('knee-guard', -4, -2, 8, 7, kneeGuard);
+    add('heel', -4, -2, 10, 8, heel);
     for (const key of ['pistol', 'shotgun', 'repeater']) for (const variant of ['base', 'evolved'])
       add(key + '-' + variant, -5, -9, 33, 22, c => weapon(c, key, variant === 'evolved'));
     add('muzzle-flash', -11, -11, 22, 22, flash);
@@ -500,14 +534,23 @@ window.Character = (function () {
     // Being hit rocks the whole figure away from the attacker; it decays like the flash.
     const kick = motion ? clamp(p.hurtKick, 0, 1) : 0;
     const kx = clamp(p.hurtDirX, -1, 1), ky = clamp(p.hurtDirY, -1, 1);
+    const breath = motion ? Math.sin(t * 2.1) * (moving ? 0.08 : 0.22) : 0;
+    const stance = motion ? (dash ? -0.16 : clamp(vx / 300, -1, 1) * 0.085 + (moving ? Math.sin(phase) * 0.018 : 0)) : 0;
+    const crouch = motion && dash ? 1 : 0;
+    const brace = motion ? clamp(recoil, 0, 2.5) * 0.16 + Math.abs(stance) * 0.35 : 0;
+    const dashLean = dash ? -0.22 : 0;
     return {
       facing: directions[index], frame: views[frame], mirror, aim, rearGun: sin < -0.25,
       weapon: Object.prototype.hasOwnProperty.call(weaponOutlines, p.weapon) ? p.weapon : 'pistol',
       evolved: !!p.evolved,
       bob: motion ? (moving ? -Math.abs(Math.sin(phase)) * 0.85 : Math.sin(t * 2.1) * 0.22) : 0,
+      breath,
+      stance,
+      crouch,
+      brace,
       stepLeft: stride, stepRight: stride ? -stride : 0,
       // Recoil pushes the torso back along the aim line and lifts the shoulders slightly.
-      lean: motion ? inertia * 0.045 - cos * recoil * 0.034 + (dash ? clamp(p.dashDirX, -1, 1) * 0.13 : 0)
+      lean: motion ? inertia * 0.045 - cos * recoil * 0.034 + (dash ? clamp(p.dashDirX, -1, 1) * 0.13 + dashLean : 0)
         + kick * (kx * 0.12 + ky * 0.04) : 0,
       // Wounded: the hunter crouches a little and hunches, so low health is visible in the
       // body, not only in the health bar. Only active when hp/maxHp are known, so a bare
@@ -537,9 +580,9 @@ window.Character = (function () {
     const mirror = q.mirror ? -1 : 1;
     const local = (lx, ly) => {
       const mx = lx * mirror;
-      return { x: x + bodyCos * mx - bodySin * ly, y: y + bodySin * mx + bodyCos * ly + q.bob };
+      return { x: x + bodyCos * mx - bodySin * ly, y: y + bodySin * mx + bodyCos * ly + q.bob + q.drop };
     };
-    const lanternLocal = local(-10 - Math.sin(q.lantern) * 4, 10 + Math.cos(q.lantern) * 4);
+    const lanternLocal = local(-10 - Math.sin(q.lantern) * 4, 10 + Math.cos(q.lantern) * 4 + q.breath);
     const aim = finite(q.aim), gunX = 24 - q.recoil;
     // The weapon is drawn outside the torso's shove/bob (the arm absorbs the hit), so the
     // muzzle anchor must stay on that same steady line or the flash would drift off the barrel.
@@ -566,8 +609,8 @@ window.Character = (function () {
     const w = assets.weapons[q.weapon][q.evolved ? 'evolved' : 'base'];
     ctx.save(); ctx.rotate(q.aim); // Never rotate the gun by body lean/wrist: exact gameplay aim.
     // Recoil compresses the arm and slides the weapon along its own axis, not off the aim line.
-    joint(ctx, 'upper-arm', source, 1, 0, q.wrist);
-    joint(ctx, 'forearm', source, -q.recoil, 0, q.wrist * 0.25);
+    joint(ctx, 'upper-arm', source, 1, q.brace * 0.35, q.wrist + q.stance * 0.35);
+    joint(ctx, 'forearm', source, -q.recoil, q.brace, q.wrist * 0.25 + q.stance * 0.25);
     joint(ctx, w.part, source, -q.recoil, 0);
     // The support hand grips the barrel BEFORE the trigger hand is drawn, so the near hand
     // overlaps the far one instead of the two reading as one wide blob.
@@ -582,28 +625,35 @@ window.Character = (function () {
   }
   function figure(ctx, q, source) {
     bodySpace(ctx, q, () => {
-      joint(ctx, 'cape', source, 0, 0, q.cloak);
+      joint(ctx, 'cape', source, 0, q.crouch * 1.4, q.cloak);
       // Thighs and shin boots move as hinged pairs, underneath split coat skirts.
       for (const [x, step] of [[-4.1, q.stepLeft], [4.1, q.stepRight]]) {
-        joint(ctx, 'leg', source, x, 7 + step * 0.5, step * 0.055);
-        joint(ctx, 'boot', source, x, 14 + step, -step * 0.06, x < 0);
+        const crouchY = q.crouch * 1.8;
+        joint(ctx, 'leg', source, x, 7 + step * 0.5 + crouchY, step * 0.055 - q.crouch * 0.12);
+        joint(ctx, 'knee-guard', source, x, 11 + step * 0.5 + crouchY, step * 0.055 - q.crouch * 0.12, x < 0);
+        joint(ctx, 'boot', source, x, 14 + step + crouchY, -step * 0.06 - q.crouch * 0.18, x < 0);
+        joint(ctx, 'heel', source, x, 20 + step + crouchY, -step * 0.06 - q.crouch * 0.18, x < 0);
       }
       joint(ctx, 'hem-left', source, 0, 0, q.cloak * 0.65 + q.stepLeft * 0.018);
       joint(ctx, 'hem-right', source, 0, 0, -q.cloak * 0.35 + q.stepRight * 0.018);
     });
     if (q.rearGun) gun(ctx, q, source);
     bodySpace(ctx, q, () => {
-      part(ctx, 'torso-' + q.frame, source);
-      joint(ctx, 'idle-arm', source, -9, -4, q.lantern * 0.65);
-      joint(ctx, 'lantern', source, -10, 10, q.lantern);
+      joint(ctx, 'torso-' + q.frame, source, 0, q.breath, q.stance * 0.3);
+      joint(ctx, 'coat-pin', source, 0, q.breath - 2, q.stance * 0.3);
+      joint(ctx, 'idle-arm', source, -9, -4 + q.breath, q.lantern * 0.65);
+      joint(ctx, 'lantern', source, -10, 10 + q.breath, q.lantern);
       // Asymmetric cape lies on the left shoulder, not as a round blanket over the chest.
       joint(ctx, 'cape', source, 0, 0, q.cloak * 0.75);
-      joint(ctx, 'scarf-tail', source, 3, -9, q.scarf);
+      joint(ctx, 'scarf-tail', source, 3, -9 + q.breath, q.scarf);
       part(ctx, 'scarf', source);
     });
     if (!q.rearGun) gun(ctx, q, source);
     // Face always reads clearly above a passing arm. Hat brim remains above the eyes.
-    bodySpace(ctx, q, () => part(ctx, 'head-' + q.frame, source));
+    bodySpace(ctx, q, () => {
+      joint(ctx, 'head-' + q.frame, source, 0, q.breath, q.stance * 0.15);
+      joint(ctx, 'hat-feather', source, 5, -25 + q.breath, q.stance * 0.2 + q.cloak * 0.15);
+    });
   }
   function requireInit() { if (!assets) throw new Error('Character.init() must be called before drawing'); }
   function draw(ctx, p, time, options = {}) {
