@@ -1571,7 +1571,7 @@
       p.vx = p.dashDirX * sp;
       p.vy = p.dashDirY * sp;
       // 残影
-      if (!settings.reduceMotion && p.afterimages.length < 12 && Math.random() < 0.7) {
+      if (!settings.reduceMotion && canSpawnGhost(p)) {
         p.afterimages.push({ x: p.x, y: p.y, a: p.aim, life: 0.28, max: 0.28, pose: Character.capture(p, g.t, { reduceMotion: settings.reduceMotion }) });
       }
       if (Math.random() < 0.8) {
@@ -1664,7 +1664,7 @@
     p.dashCd = p.dashCdMax * p.dashCdMult;
     p.invuln = Math.max(p.invuln, 0.34);
     g.stats.dashes++;
-    if (!settings.reduceMotion && p.afterimages.length < 12) {
+    if (!settings.reduceMotion && canSpawnGhost(p)) {
       p.afterimages.push({ x: p.x, y: p.y, a: p.aim, life: 0.3, max: 0.3, pose: Character.capture(p, g.t, { reduceMotion: settings.reduceMotion }) });
     }
     g.trauma = Math.min(1, g.trauma + 0.16);
@@ -3441,6 +3441,7 @@
     drawGems(g);
     drawPickups(g);
     drawEnemies(g);
+    drawPlayerGlow(g);
     drawPlayer(g);
     drawOrbs(g);
     drawAura(g);
@@ -3606,8 +3607,10 @@
     }
     const p = g.player;
     if (!p.dead) {
-      ctx.globalAlpha = 0.6;
-      ctx.drawImage(sh, p.x - 26, p.y + 8, 52, 26);
+      // 脚下的接触阴影：随身位下沉/冲刺压低，让角色真的踩在地上而不是浮着。
+      const s = 40, low = Math.max(0, p.dashT) > 0 ? 0.34 : 0;
+      ctx.globalAlpha = 0.55 - low;
+      ctx.drawImage(sh, p.x - s / 2, p.y + 22 - s * 0.22 + low * 10, s, s * 0.62);
     }
     ctx.restore();
   }
@@ -3868,6 +3871,46 @@
         }
       }
     }
+  }
+
+  // 冲刺残影按距离取样：每个残影都是一整张人物（约 20 次 drawImage），
+  // 旧逻辑每帧最多刷 12 张、彼此几乎重叠；按 7 像素间隔取样后最多 7 张，
+  // 画面更干净，冲刺时的人物绘制量也减半。
+  const GHOST_GAP = 7, GHOST_MAX = 7;
+  function canSpawnGhost(p) {
+    if (p.afterimages.length >= GHOST_MAX) return false;
+    const last = p.afterimages[p.afterimages.length - 1];
+    return !last || Math.hypot(p.x - last.x, p.y - last.y) >= GHOST_GAP;
+  }
+
+  // 守夜人自己的光要待在守夜人身后。把提灯光晕压在人物上面（2026-10-27 之前）
+  // 会把外套和双腿冲成惨白的一片，造型全被抹平；先画光再画人，
+  // 光是落在地上的，深色的身形才是最后压上去的一层。
+  function drawPlayerGlow(g) {
+    const p = g.player;
+    if (p.dead) return;
+    const anchors = Character.anchors(p, g.t, { reduceMotion: settings.reduceMotion });
+    const lx = anchors.lantern.x, ly = anchors.lantern.y;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const grd = ctx.createRadialGradient(lx, ly, 0, lx, ly, 30);
+    grd.addColorStop(0, 'rgba(255,240,200,.62)');
+    grd.addColorStop(0.25, 'rgba(255,190,110,.30)');
+    grd.addColorStop(1, 'rgba(255,150,60,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(lx, ly, 30, 0, TAU); ctx.fill();
+    // The lantern hangs at hip height, so it never lights the boots. A separate soft pool
+    // at the feet keeps the stride readable in near-dark, and is skipped on low quality.
+    if (!qualityLow) {
+      const fx = p.x, fy = p.y + 21;
+      const fg = ctx.createRadialGradient(fx, fy, 0, fx, fy, 24);
+      fg.addColorStop(0, 'rgba(206,226,238,.16)');
+      fg.addColorStop(0.45, 'rgba(150,182,200,.07)');
+      fg.addColorStop(1, 'rgba(120,150,170,0)');
+      ctx.fillStyle = fg;
+      ctx.beginPath(); ctx.ellipse(fx, fy, 24, 13, 0, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
   }
 
   function drawPlayer(g) {
@@ -4281,25 +4324,7 @@
     if (!p.dead) {
       // 光点与人物部件共用姿态，转身和后坐时仍贴合灯罩及枪口。
       const anchors = Character.anchors(p, g.t, { reduceMotion: settings.reduceMotion });
-      const lx = anchors.lantern.x, ly = anchors.lantern.y;
-      const grd = ctx.createRadialGradient(lx, ly, 0, lx, ly, 30);
-      grd.addColorStop(0, 'rgba(255,240,200,.6)');
-      grd.addColorStop(0.25, 'rgba(255,190,110,.28)');
-      grd.addColorStop(1, 'rgba(255,150,60,0)');
-      ctx.fillStyle = grd;
-      ctx.beginPath(); ctx.arc(lx, ly, 30, 0, TAU); ctx.fill();
-      // The lantern hangs at hip height, so it never lights the boots. A separate soft
-      // pool at the feet keeps the legs and stride readable in near-dark. Skipped on low
-      // quality, where the extra composite pass costs more than the detail it adds.
-      if (!qualityLow) {
-        const fx = p.x, fy = p.y + 22;
-        const fg = ctx.createRadialGradient(fx, fy, 0, fx, fy, 26);
-        fg.addColorStop(0, 'rgba(196,222,236,.20)');
-        fg.addColorStop(0.45, 'rgba(150,182,200,.09)');
-        fg.addColorStop(1, 'rgba(120,150,170,0)');
-        ctx.fillStyle = fg;
-        ctx.beginPath(); ctx.ellipse(fx, fy, 26, 15, 0, 0, TAU); ctx.fill();
-      }
+      // 提灯与足下光晕已移到人物之后（drawPlayerGlow），这里只留枪口火光。
       // 枪口
       if (anchors.muzzleAlpha > 0) {
         const mx = anchors.muzzle.x, my = anchors.muzzle.y;

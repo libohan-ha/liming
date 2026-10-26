@@ -2,13 +2,27 @@
  * Art.init must call Character.init once before drawing. Units are world pixels.
  * Origin is the torso/collision centre, not the feet. Gun local muzzle is (24, 0).
  * Only init builds paths/gradients. Animation composites articulated cached parts.
+ *
+ * Art direction (2026-10-27 "ink & lantern" pass): the figure is a dark cool mass held
+ * together by two lights only — a cold moon rim from above and the warm lantern bounce
+ * from below-left. Every plane is one of three values (shadow / body / light), so the
+ * silhouette survives at real game scale instead of turning into a pale sticker.
  */
 window.Character = (function () {
   'use strict';
   const SS = 3, ATLAS_W = 256, PAD = 2;
-  const INK = '#101920', BRASS = '#bc9758', MOON = '#a9c4d0';
+  const INK = '#0a1218';
+  const RIM = '#d6f2f7', RIM_SOFT = '#8fb6c2';
+  const WARM = '#f6c87e', WARM_SOFT = 'rgba(246,200,126,.30)';
+  const BRASS = '#c49c5b', BRASS_HI = '#f2da9e';
+  const SKIN_HI = '#fcefda', SKIN = '#efd2ae', SKIN_MID = '#cfa584', SKIN_DARK = '#96735d', SKIN_DEEP = '#6a4d3f';
+  const COAT_HI = '#6d97a7', COAT = '#2b4a58', COAT_MID = '#1d3644', COAT_DARK = '#0e1c25';
+  const LEATHER = '#4b3628', LEATHER_HI = '#7f5c3f';
+  const STEEL_HI = '#c9dfe4', STEEL = '#2f444e', STEEL_DARK = '#16232b';
+  const CAPE_HI = '#51798a', CAPE = '#213844', CAPE_DARK = '#0f1d27';
   const finite = (v, fallback = 0) => Number.isFinite(v) ? v : fallback;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, finite(v)));
+  const HEAD_SCALE = 0.88;
   const views = ['side', 'quarter', 'front', 'rearquarter', 'back'];
   const directions = ['right', 'front-right', 'front', 'front-left', 'left', 'back-left', 'back', 'back-right'];
   let assets = null;
@@ -40,97 +54,94 @@ window.Character = (function () {
     return g;
   }
   function buckle(c, x, y, w = 2.6, h = 2.1) {
-    c.fillStyle = '#30251b'; c.fillRect(x, y, w, h);
+    c.fillStyle = '#2a2119'; c.fillRect(x, y, w, h);
     c.strokeStyle = BRASS; c.lineWidth = 0.5; c.strokeRect(x, y, w, h);
-    line(c, '#e6c88e', 0.36, `M${x + w * 0.5} ${y} L${x + w * 0.5} ${y + h}`);
+    line(c, BRASS_HI, 0.36, `M${x + w * 0.5} ${y} L${x + w * 0.5} ${y + h}`);
   }
 
   function hatFeather(c) {
     // A broken quill gives the hunter a readable asymmetrical profile at 1x.
-    paint(c, grad(c, 0, -2, 5, -12, ['#d9e7e5', '#78909a', '#273945']),
-      'M0 1 C1 -3 0 -8 3 -12 C5 -10 7 -7 6 -4 C5 -1 3 1 0 1 Z', INK, 0.55);
-    line(c, '#c5d9d8', 0.35, 'M1 -0.2 C3 -4 4 -8 4 -10');
-    line(c, '#516a75', 0.3, 'M2 -3 L5 -5 M2.8 -5.2 L5.2 -7.2 M3.5 -7.4 L5 -9');
+    paint(c, grad(c, 0, -2, 4, -11, ['#cfe4e7', '#708f9b', '#1b2b36']),
+      'M0 1 C1.4 -3 1 -7.6 3.4 -11.2 C4.6 -9.4 5.6 -6.8 5 -4.2 C4.2 -1.2 2.6 1 0 1 Z', INK, 0.55);
+    line(c, '#b9d8dc', 0.35, 'M1 -0.2 C2.6 -3.6 3.4 -7 3.8 -9.4');
+    line(c, '#44606c', 0.3, 'M2 -3 L4.4 -4.8 M2.6 -5 L4.6 -6.6');
   }
 
   function coatPin(c) {
     // A small compass pin anchors the chest and adds a warm identity mark.
-    paint(c, '#423a2b', 'M0 -2 L3 1 L0 5 L-3 1 Z', INK, 0.55);
-    paint(c, '#d8b76e', 'M0 -1.2 L1.8 1 L0 3.1 L-1.8 1 Z', '#6d5431', 0.35);
-    line(c, '#fff0b7', 0.3, 'M0 -0.6 L0 2.6 M-1.3 1 L1.3 1');
+    paint(c, '#332a1e', 'M0 -2 L3 1 L0 5 L-3 1 Z', INK, 0.55);
+    paint(c, '#dcb96c', 'M0 -1.2 L1.8 1 L0 3.1 L-1.8 1 Z', '#6d5431', 0.35);
+    line(c, '#fff2bd', 0.3, 'M0 -0.6 L0 2.6 M-1.3 1 L1.3 1');
   }
 
   function kneeGuard(c) {
     // A separate curved knee plate makes the stride read as a joint, not a tube.
-    paint(c, grad(c, -3, 0, 3, 4, ['#8da4ae', '#4c6471', '#263b49']),
+    paint(c, grad(c, -3, 0, 3, 4, ['#9db6bf', '#4f6a77', '#1f333f']),
       'M-3 0 C-1 -1 2 -1 3 0 L2.5 4 C1 5 -1 5 -2.5 4 Z', INK, 0.55);
-    line(c, '#bfd1d5', 0.35, 'M-1.8 0.5 C0 1.3 1.5 1.3 2.2 0.5');
-    line(c, '#263a48', 0.4, 'M-1.8 3.4 C0 4 1.3 4 2 3.3');
+    line(c, RIM, 0.4, 'M-1.8 0.5 C0 1.3 1.5 1.3 2.2 0.5');
+    line(c, '#16262f', 0.45, 'M-1.8 3.4 C0 4 1.3 4 2 3.3');
   }
 
   function heel(c) {
     // The raised heel and tread interrupt the boot's long vertical silhouette.
-    paint(c, '#242f36', 'M-3 0 L2 0 L3 3 L5 4 L4.5 6 L-3 6 Z', INK, 0.5);
-    line(c, '#bdcdd0', 0.35, 'M-2.4 1 L1.7 1.1 M-2.5 4.8 L4 5');
-    line(c, '#7d6249', 0.3, 'M1.6 2 L2.4 3 M0 2 L0.8 3');
+    paint(c, '#1d272e', 'M-3 0 L2 0 L3 3 L5 4 L4.5 6 L-3 6 Z', INK, 0.5);
+    line(c, '#b6c8cc', 0.4, 'M-2.4 1 L1.7 1.1 M-2.5 4.8 L4 5');
+    line(c, '#6d5236', 0.3, 'M1.6 2 L2.4 3 M0 2 L0.8 3');
   }
 
   function torso(c, view) {
     const front = view !== 'back' && view !== 'rearquarter';
     const narrow = view === 'side';
-    c.save(); if (narrow) c.scale(0.79, 1);
-    // Tailored shoulders and waist: no ellipse, separate wool panels and lapels.
-    paint(c, grad(c, -9, -9, 9, 9, ['#718b99', '#3e5868', '#233544']),
-      'M-4 -10 C-7 -10 -11 -8 -12 -4 L-9 0 C-8 3 -7 5 -8 8 C-3 10 4 10 8 8 C7 4 8 1 10 -2 L11 -5 C9 -8 6 -10 4 -10 Z');
-    // Wet wool: a soft sheen down the lit shoulder and a deep crease at the waist.
-    paint(c, grad(c, -10, -9, -2, 2, ['rgba(214,232,238,.5)', 'rgba(214,232,238,0)']),
-      'M-11 -4 C-9 -8 -6 -10 -4 -10 L-3 -6 C-6 -5 -8 -3 -9 0 Z', null);
-    paint(c, '#1d2d3a', 'M-9 0 C-8 3 -7 5 -8 8 L-5 8 C-5 5 -6 2 -6 -1 Z', null);
-    paint(c, '#526d7d', 'M-9 -6 C-7 -7 -6 -7 -4 -6 L-2 4 L-7 7 C-7 2 -8 -1 -9 -6 Z', null);
-    paint(c, '#2b404f', 'M4 -8 C7 -8 9 -5 9 -2 L6 1 L5 8 L0 9 L1 -3 Z', null);
-    // Fabric folds: short directional strokes, denser near the waist.
-    line(c, '#859dab', 0.55, 'M-9 -5 C-8 -7 -7 -7 -5 -8 M-7 3 L-7 6 M6 -7 C8 -6 8 -4 9 -3');
-    line(c, '#1a2b37', 0.5, 'M-6 -2 C-5 1 -5.5 3 -5 5 M3 -4 C4 -1 3.5 2 4 5');
-    line(c, '#93aab6', 0.35, 'M-4.6 -1 C-4 1 -4.2 3 -3.8 4.6');
+    c.save(); if (narrow) c.scale(0.82, 1);
+    // Dark wool coat. The body is deliberately one dark value: the hunter reads as a
+    // silhouette that two lights pick out, instead of a pale sticker that floats.
+    paint(c, grad(c, -9, -10, 4, 8, ['#2b4656', '#20394a', '#142633']),
+      'M-3 -10 C-6 -10 -8.4 -8.2 -9.2 -5 L-7.2 0 C-6.6 3 -6.3 5 -7 8 C-3 9.6 3 9.6 7 8 C6.3 5 6.6 3 7.2 0 L9.2 -5 C8.4 -8.2 6 -10 3 -10 Z', INK, 0.9);
+    // Warm bounce off the lantern, low and to the left. This is the only warm paint on the coat.
+    paint(c, grad(c, -8, 2, -1, 9, ['rgba(240,178,104,.26)', 'rgba(240,178,104,0)']),
+      'M-7.2 0 C-6.6 3 -6.3 5 -7 8 C-5 8.6 -3.4 8.4 -2.6 7.6 L-3.4 2 C-5 0.6 -6.4 -0.2 -7.2 0 Z', null);
+    // Far side, turned away from both lights: pure shadow with a single cool bounce.
+    paint(c, '#162835', 'M3 -9.8 C5.8 -9.6 8.2 -7.8 9 -5 L7.2 0 L6.3 8 L0.6 9 L1.4 -3 Z', null);
+    paint(c, '#33566a', 'M4.6 -7 C6.4 -5.8 7.2 -3.4 7 -1 L6 1 L5.4 6 L3.4 6.6 L4.2 -2 Z', null);
+    // Fabric folds: five deliberate strokes, no field of hairlines.
+    line(c, '#7ea3b1', 0.55, 'M-8 -5.6 C-7.4 -7.4 -6.2 -8.6 -4.4 -9.2');
+    line(c, '#0c1a23', 0.75, 'M-5.6 -1 C-4.8 2 -5 4 -4.6 6 M2.6 -3 C3.4 -1 3.1 2 3.6 5');
     // Moonlight edge along the top of the shoulders — the rain is backlit here.
-    line(c, '#d6ecf2', 0.6, 'M-11 -5 C-9 -8.4 -6 -10 -4 -10 M4 -10 C6.4 -9.6 9 -7.4 10.4 -5');
+    line(c, RIM, 0.8, 'M-9 -4.6 C-8.2 -8 -5.8 -10 -3.2 -10 M3.2 -10 C5.8 -9.6 8 -7.4 9 -4.2');
     if (front) {
       // Collar rises around the neck but never masks the cheeks.
-      paint(c, '#172932', 'M-5 -11 L-7 -8 L-3 -2 L0 -6 L3 -2 L7 -8 L5 -11 Z');
-      paint(c, '#6d8594', 'M-5 -10 L-5 -7 L-2 -4 L-1 -6 Z', null);
-      paint(c, '#415b6a', 'M4 -10 L5 -7 L2 -4 L1 -6 Z', null);
-      // Collar edge catches the same moonlight as the shoulders.
-      line(c, '#a9c6d2', 0.4, 'M-5 -10.6 L-3 -8.4 M5 -10.6 L3 -8.6');
-      paint(c, '#263b4a', 'M-2 -5 L1 -6 L3 7 L-1 8 Z', null);
+      paint(c, '#0e1f28', 'M-4.6 -10.6 L-6.6 -7.8 L-2.8 -2 L0 -6 L2.8 -2 L6.6 -7.8 L4.6 -10.6 Z');
+      paint(c, '#4a6a79', 'M-4.6 -9.8 L-4.6 -7 L-1.8 -4 L-0.8 -6 Z', null);
+      paint(c, '#264554', 'M3.8 -9.8 L4.6 -7 L1.8 -4 L0.8 -6 Z', null);
+      line(c, '#a9c6d2', 0.45, 'M-4.6 -10.4 L-2.8 -8.2 M4.6 -10.4 L2.8 -8.4');
+      // Open coat front: two dark lapel planes either side of a lit shirt strip.
+      paint(c, '#10222c', 'M-1.8 -5 L1 -6 L2.8 7 L-1 8 Z', null);
+      paint(c, '#2c4856', 'M-1.1 -5.2 L0.4 -5.6 L1.1 7 L-0.4 7.4 Z', null);
       for (let y = -2; y < 7; y += 2.5) {
-        c.fillStyle = BRASS; c.fillRect(0.2, y, 0.8, 0.65);
-        c.fillStyle = '#f0d5a0'; c.fillRect(0.25, y, 0.35, 0.2);
+        c.fillStyle = BRASS; c.fillRect(0.2, y, 0.9, 0.7);
+        c.fillStyle = BRASS_HI; c.fillRect(0.25, y, 0.4, 0.22);
       }
       // Diagonal leather baldric, piping and a real brass clasp.
-      paint(c, '#4b3529', 'M-7 -8 L-5 -9 L7 7 L4 8 Z', '#1c2427', 0.6);
-      line(c, '#99764e', 0.5, 'M-5.8 -8 L5.4 7'); buckle(c, -1.3, -0.6, 2.5, 2.5);
-      paint(c, '#3e2e27', 'M-8 5 C-3 6 3 6 8 5 L8 7 C3 8 -3 8 -8 7 Z', INK, 0.55);
+      paint(c, '#3d2a1e', 'M-6.8 -8 L-5 -9 L7 7 L4 8 Z', '#141a1e', 0.65);
+      line(c, '#a07c50', 0.6, 'M-5.8 -8 L6.2 8'); buckle(c, -1.3, -0.6, 2.6, 2.6);
+      paint(c, '#2d211a', 'M-7.4 5 C-3 6 3 6 7.4 5 L7.4 7 C3 8 -3 8 -7.4 7 Z', INK, 0.6);
       buckle(c, 1.3, 5.5);
-      line(c, '#1b303e', 0.55, 'M-6 2 L-3 2 M5 2 L7 1');
-      line(c, '#8698a2', 0.4, 'M-6 1.7 L-3 1.7');
+      line(c, '#8a9ea8', 0.45, 'M-5.6 1.7 L-3 1.7 M4.6 1.7 L6.4 1');
       // Compact cartridge pouch, not a sci-fi rectangular breastplate.
-      paint(c, '#584034', 'M-8 4 C-6 3 -4 4 -4 5 L-4 8 C-5 9 -7 9 -8 8 Z');
-      line(c, '#a18159', 0.45, 'M-7 4.5 L-5 4.5 M-6.5 6 L-6.5 7.6');
+      paint(c, '#42301f', 'M-7.4 4 C-5.6 3 -3.8 4 -3.8 5 L-3.8 8 C-4.8 9 -6.6 9 -7.4 8 Z');
+      line(c, '#a3815a', 0.45, 'M-6.6 4.5 L-4.8 4.5 M-6 6 L-6 7.6');
     } else {
       // Rear yoke, centre seam, belt and weathered shoulder stitching.
-      paint(c, '#526b7c', 'M-10 -6 C-5 -9 5 -9 10 -6 L8 -2 C2 -4 -3 -4 -9 -2 Z', null);
-      line(c, '#91a7b1', 0.55, 'M-9 -5 C-4 -7 4 -7 9 -5');
-      line(c, '#152936', 0.6, 'M0 -4 C-1 0 1 4 0 8');
-      line(c, '#667f8d', 0.4, 'M0.8 -3 L0.8 6');
-      paint(c, '#3b2c26', 'M-8 5 C-4 6 4 6 8 5 L8 7 C2 8 -2 8 -8 7 Z');
+      paint(c, '#2c4757', 'M-8.6 -6 C-4.4 -8.6 4.4 -8.6 8.6 -6 L7 -2.4 C2 -4.2 -2.6 -4.2 -7.8 -2.4 Z', null);
+      line(c, '#8aa4af', 0.55, 'M-7.8 -5 C-3.6 -6.8 3.6 -6.8 7.8 -5');
+      line(c, '#0a1720', 0.7, 'M0 -4 C-1 0 1 4 0 8');
+      paint(c, '#2d211a', 'M-7.4 5 C-3.6 6 3.6 6 7.4 5 L7.4 7 C2 8 -2 8 -7.4 7 Z');
       buckle(c, -3, 5.5, 2.3, 1.8);
-      paint(c, '#463830', 'M-5 -9 L-3 -10 L7 6 L5 7 Z', INK, 0.5);
-      line(c, '#977956', 0.4, 'M-3.6 -8 L5.8 6');
+      paint(c, '#332822', 'M-4.6 -8.6 L-2.8 -9.6 L6.6 5.8 L4.6 6.8 Z', INK, 0.5);
+      line(c, '#7f6344', 0.45, 'M-3.4 -7.6 L5.4 6');
       // Back folds hint at the shoulder blades under wet cloth.
-      line(c, '#243845', 0.5, 'M-5 -3 C-4 0 -4.5 3 -4 6 M5 -3 C4 0 4.5 3 4 6');
+      line(c, '#132530', 0.6, 'M-4.6 -3 C-3.6 0 -4 3 -3.6 6 M4.6 -3 C3.6 0 4 3 3.6 6');
     }
-    // Short irregular brush strokes suggest wet cloth rather than noise.
-    line(c, '#738b98', 0.35, 'M-5 0 L-4.4 1.2 M-6.8 4 L-6.2 5 M5.8 -4 L6.3 -2.5 M4 3 L4.3 4.3');
     c.restore();
   }
 
@@ -138,244 +149,248 @@ window.Character = (function () {
     const profile = view === 'side', quarter = view === 'quarter';
     const rear = view === 'back' || view === 'rearquarter';
     // Neck: two planes plus the shadow a jaw casts, so the head sits on the body.
-    paint(c, grad(c, -2, -16, 3, -10, ['#bda792', '#9a8474', '#6b584d']),
-      'M-2 -15 L-2 -10 C0 -9 3 -10 4 -11 L3 -16 Z', INK, 0.6);
-    line(c, '#5d4d44', 0.45, profile ? 'M-1.6 -13 C0 -12.4 2 -12.6 3.4 -13.2' : 'M-1.4 -13.2 C0 -12.5 2 -12.6 3.6 -13.4');
+    paint(c, grad(c, -2, -15, 3, -10, ['#b9a28c', '#947d6d', '#5f4d43']),
+      'M-2 -14 L-2 -10 C0 -9 3 -10 4 -11 L3 -15 Z', INK, 0.6);
+    line(c, '#4b3c34', 0.5, profile ? 'M-1.6 -12.6 C0 -12 2 -12.2 3.4 -12.8' : 'M-1.4 -12.8 C0 -12.1 2 -12.2 3.6 -13');
     // Hair mass tucked behind the ear; strands break the silhouette.
-    paint(c, grad(c, -6, -24, 6, -14, ['#39434f', '#28303a', '#171d26']),
-      'M-6 -23 C-9 -22 -8 -17 -6 -14 L-3 -13 L0 -17 L5 -16 L7 -22 Z');
-    line(c, '#59646f', 0.4, 'M-6.6 -21 C-7.4 -19 -7 -16.6 -6.2 -15 M-5 -22 L-5.6 -18');
+    paint(c, grad(c, -6, -23, 6, -13, ['#2d3742', '#1f272f', '#10161d']),
+      'M-6 -22 C-9 -21 -8 -16 -6 -13.5 L-3 -12.5 L0 -16.5 L5 -15.5 L7 -21 Z');
+    line(c, '#4a5560', 0.45, 'M-6.6 -20 C-7.4 -18 -7 -15.6 -6.2 -14 M-5 -21 L-5.6 -17');
     if (!rear) {
       // Ear: helix, antihelix and the dark concha that makes it read as a volume.
-      paint(c, '#cdbba4', 'M-5 -21 C-6 -23 -8 -21 -7 -19 C-7 -17 -5 -17 -4 -18 Z', INK, 0.55);
-      paint(c, '#9a8577', 'M-6.4 -20.6 C-6.9 -20 -6.6 -18.4 -5.6 -18.2 C-5.2 -18.8 -5.4 -20 -6.4 -20.6 Z', null);
-      line(c, '#7d6a5e', 0.32, 'M-6 -20.2 C-6.4 -19.4 -6.2 -18.8 -5.7 -18.7');
+      paint(c, '#d7c2a7', 'M-5 -20 C-6 -22 -8 -20 -7 -18 C-7 -16 -5 -16 -4 -17.2 Z', INK, 0.55);
+      paint(c, '#967a6a', 'M-6.4 -19.6 C-6.9 -19 -6.6 -17.4 -5.6 -17.2 C-5.2 -17.8 -5.4 -19 -6.4 -19.6 Z', null);
+      line(c, '#6f5a4f', 0.32, 'M-6 -19.2 C-6.4 -18.4 -6.2 -17.8 -5.7 -17.7');
       if (!profile) {
-        paint(c, '#c2ae97', 'M5 -21 C7 -23 8 -20 7 -18 L5 -17 Z', INK, 0.5);
-        paint(c, '#947f6f', 'M5.6 -20.4 C6.3 -20.6 6.8 -19.6 6.3 -18.9 C5.9 -19.3 5.6 -19.9 5.6 -20.4 Z', null);
-        line(c, '#887364', 0.32, 'M6 -20 L6.4 -19');
+        paint(c, '#cdb69b', 'M5 -20 C7 -22 8 -19 7 -17 L5 -16 Z', INK, 0.5);
+        paint(c, '#8f7668', 'M5.6 -19.4 C6.3 -19.6 6.8 -18.6 6.3 -17.9 C5.9 -18.3 5.6 -18.9 5.6 -19.4 Z', null);
+        line(c, '#7c6558', 0.32, 'M6 -19 L6.4 -18');
       }
-      const face = profile ? 'M-3 -24 C1 -25 5 -24 6 -22 L6 -20 L8 -18.5 L6 -18 L6 -15.5 C4 -13 1 -12 -2 -14 C-4 -16 -4 -20 -3 -24 Z'
-        : quarter ? 'M-4 -24 C-1 -25 4 -24 5 -22 L5.5 -20 L7 -18.5 L5 -18 L5 -15.5 C3 -12 -1 -12 -3 -14 C-5 -16 -5 -21 -4 -24 Z'
-          : 'M-5 -24 C-3 -25 3 -25 5 -23 L5 -18 C5 -15 3 -12.5 0 -12.5 C-3 -13 -5 -15 -5 -18 Z';
+      const face = profile ? 'M-3 -23 C1 -24 5 -23 6 -21 L6 -19 L8 -17.5 L6 -17 L6 -14.5 C4 -12 1 -11 -2 -13 C-4 -15 -4 -19 -3 -23 Z'
+        : quarter ? 'M-4 -23 C-1 -24 4 -23 5 -21 L5.5 -19 L7 -17.5 L5 -17 L5 -14.5 C3 -11.5 -1 -11.5 -3 -13.5 C-5 -15.5 -5 -20 -4 -23 Z'
+          : 'M-5 -23 C-3 -24 3 -24 5 -22 L5 -17.5 C5 -14.5 3 -12 0 -12 C-3 -12.5 -5 -14.5 -5 -17.5 Z';
       // Base skin: warm, but grading darker toward the jaw and the far cheek.
-      paint(c, grad(c, -4, -24, 6, -13, ['#f0e4cd', '#ddcbb2', '#b09784', '#8b7466']), face, INK, 0.6);
-      // Forehead lit plane and the temple that falls away into the brim shadow.
-      paint(c, '#f6ecd8', profile ? 'M-1 -23 C2 -23.6 4 -23 5 -22 L4.6 -21.2 C2 -21.8 0 -21.8 -1 -21.4 Z' : 'M-3.6 -23.4 C-1 -24.2 2 -24 4.4 -22.8 L4.2 -21.9 C1.6 -22.6 -1.2 -22.6 -3.4 -22 Z', null);
-      paint(c, '#bda594', profile ? 'M5.2 -22.4 C5.8 -21.6 5.9 -20.8 5.7 -20 L4.6 -20.6 Z' : 'M4.4 -22.8 C5.2 -22.4 5.4 -21.4 5.2 -20.4 L4 -21 Z', null);
+      paint(c, grad(c, -4, -22, 5, -13, [SKIN_HI, SKIN, SKIN_MID, SKIN_DARK]), face, INK, 0.7);
+      // Brim shadow: the hat throws a band across the brow. This single value break is
+      // what makes the head read as a head at game scale.
+      paint(c, 'rgba(38,30,28,.30)', profile
+        ? 'M-3 -23 C1 -24 5 -23 6 -21 L6.2 -20.4 C4 -20.9 1 -21.1 -3 -20.9 Z'
+        : 'M-4.6 -23 C-2 -24 3 -24 5 -22 L5.1 -21.3 C2 -21.9 -1.6 -21.9 -4.4 -21.2 Z', null);
+      // Forehead lit plane below the shadow.
+      paint(c, '#fcefda', profile ? 'M0 -20.6 C2 -20.8 4 -20.6 4.8 -20 L4.6 -19.2 C2 -19.7 0 -19.7 -0.4 -19.4 Z'
+        : 'M-3.4 -20.9 C-1 -21.4 2 -21.2 4.2 -20.2 L4 -19.4 C1.6 -20 -1 -20 -3.2 -19.6 Z', null);
+      paint(c, '#ab8f7a', profile ? 'M5.4 -21.4 C6 -20.6 6.1 -19.8 5.9 -19 L4.8 -19.6 Z' : 'M4.4 -21.8 C5.2 -21.4 5.4 -20.4 5.2 -19.4 L4 -20 Z', null);
+      paint(c, '#fff4e2', profile ? 'M1.6 -19.6 C2.6 -19.7 3.6 -19.3 4.2 -18.6 C3.2 -18.4 2.2 -18.8 1.6 -19.6 Z' : 'M-1.4 -19.4 C-0.2 -19.9 1.6 -19.9 2.8 -19.2 C1.8 -18.6 0.4 -18.6 -1 -18.9 Z', null);
       // Cheek: one broad soft plane, not patches — a light pass plus its shadow edge.
-      paint(c, '#f2e5cd', profile ? 'M2.4 -19.8 C3.4 -19.6 4.3 -18.8 4.4 -17.8 C3.4 -17.6 2.6 -18.2 2.2 -19 Z' : 'M-0.6 -19.8 C0.6 -20 2.2 -19.8 3.2 -19 C2.8 -17.8 1.4 -17.2 0.2 -17.6 C-0.2 -18.2 -0.6 -19 -0.6 -19.8 Z', null);
-      paint(c, '#c4ab95', profile ? 'M2.2 -18.2 C3 -17.8 3.6 -17 3.5 -16.2 L2.2 -16.6 Z' : 'M0 -17.8 C1 -17.6 2.2 -18 2.9 -18.8 C2.9 -17.4 1.8 -16.2 0.6 -16.2 C0.2 -16.7 0 -17.3 0 -17.8 Z', null);
+      paint(c, '#f9e7c8', profile ? 'M2.4 -18.4 C3.4 -18.2 4.3 -17.4 4.4 -16.4 C3.4 -16.2 2.6 -16.8 2.2 -17.6 Z' : 'M-0.6 -18.4 C0.6 -18.6 2.2 -18.4 3.2 -17.6 C2.8 -16.4 1.4 -15.8 0.2 -16.2 C-0.2 -16.8 -0.6 -17.6 -0.6 -18.4 Z', null);
+      paint(c, '#b79580', profile ? 'M2.2 -16.8 C3 -16.4 3.6 -15.6 3.5 -14.8 L2.2 -15.2 Z' : 'M0 -16.4 C1 -16.2 2.2 -16.6 2.9 -17.4 C2.9 -16 1.8 -14.8 0.6 -14.8 C0.2 -15.3 0 -15.9 0 -16.4 Z', null);
       // Jaw shadow: a cool plane, never a black line.
-      paint(c, '#a68c79', profile ? 'M0 -14.6 C2 -13.8 4 -13.6 5.4 -14.6 L4.8 -15.9 L0 -15.8 Z' : 'M-2.6 -14.6 C-1 -13.6 1.4 -13.4 3.4 -14.4 L2.8 -15.9 L-2.2 -15.9 Z', null);
+      paint(c, '#9c7f6c', profile ? 'M0 -13.6 C2 -12.8 4 -12.6 5.4 -13.6 L4.8 -14.9 L0 -14.8 Z' : 'M-2.6 -13.6 C-1 -12.6 1.4 -12.4 3.4 -13.4 L2.8 -14.9 L-2.2 -14.9 Z', null);
       // Nose: a narrow lit ridge, a small tip, an alar shadow. Never a bright blob.
-      paint(c, '#e6d2b9', profile ? 'M4.2 -21.4 C5 -20.8 5.5 -19.8 5.6 -18.8 L4.8 -18.7 C4.5 -19.6 4.2 -20.5 3.8 -21.1 Z' : 'M0.3 -21.2 C0.8 -20.4 1 -19.4 0.9 -18.8 L0.1 -18.7 C0 -19.6 -0.1 -20.5 -0.2 -21.1 Z', null);
-      paint(c, '#f4e8d1', profile ? 'M5.3 -18.9 L6.4 -18.7 L6.1 -18 L5.2 -18.2 Z' : 'M0.3 -19 L1.5 -18.8 L1.4 -18.1 L0.3 -18.3 Z', null);
-      paint(c, '#ad9280', profile ? 'M4.9 -18 C5.5 -17.8 6 -17.9 6.3 -18.2 L6.1 -17.4 C5.5 -17.2 5 -17.3 4.7 -17.5 Z' : 'M-0.8 -18.2 C-0.2 -18 0.3 -18 0.8 -18.2 L0.8 -17.5 C0.2 -17.3 -0.4 -17.3 -0.8 -17.6 Z', null);
-      line(c, '#6d5749', 0.35, profile ? 'M5 -18.1 C5.5 -18 5.9 -18.2 6.2 -18.5' : 'M-0.6 -18.2 C-0.1 -18.1 0.4 -18.3 0.7 -18.6');
+      paint(c, '#f5dfc2', profile ? 'M4.2 -20 C5 -19.4 5.5 -18.4 5.6 -17.4 L4.8 -17.3 C4.5 -18.2 4.2 -19.1 3.8 -19.7 Z' : 'M0.3 -19.8 C0.8 -19 1 -18 0.9 -17.4 L0.1 -17.3 C0 -18.2 -0.1 -19.1 -0.2 -19.7 Z', null);
+      paint(c, '#fdf3de', profile ? 'M5.3 -17.5 L6.4 -17.3 L6.1 -16.6 L5.2 -16.8 Z' : 'M0.3 -17.6 L1.5 -17.4 L1.4 -16.7 L0.3 -16.9 Z', null);
+      paint(c, '#9c7d69', profile ? 'M4.9 -16.6 C5.5 -16.4 6 -16.5 6.3 -16.8 L6.1 -16 C5.5 -15.8 5 -15.9 4.7 -16.1 Z' : 'M-0.8 -16.8 C-0.2 -16.6 0.3 -16.6 0.8 -16.8 L0.8 -16.1 C0.2 -15.9 -0.4 -15.9 -0.8 -16.2 Z', null);
+      line(c, '#5f4a3e', 0.35, profile ? 'M5 -16.7 C5.5 -16.6 5.9 -16.8 6.2 -17.1' : 'M-0.6 -16.8 C-0.1 -16.7 0.4 -16.9 0.7 -17.2');
+      // Eye sockets: a dark recess first, then lid, sclera, iris and a catchlight.
+      // The recess is what survives at 1x; the iris is the reward when you lean in.
       const eyeX = profile ? 3.1 : quarter ? 2.4 : 2;
-      // Brow ridge shadow, then lid crease, sclera, iris and a catchlight.
-      line(c, '#6b5648', 0.9, `M${eyeX - 1.5} -21.9 C${eyeX - 0.5} -22.2 ${eyeX + 0.5} -22.1 ${eyeX + 1.4} -21.7`);
-      line(c, '#655248', 0.5, `M${eyeX - 1.3} -21 C${eyeX - 0.4} -21.6 ${eyeX + 0.4} -21.6 ${eyeX + 1.2} -21`);
-      paint(c, '#efe9d8', `M${eyeX - 0.9} -20.75 C${eyeX - 0.6} -20.2 ${eyeX + 0.6} -20.2 ${eyeX + 0.95} -20.7 C${eyeX + 0.5} -20.35 ${eyeX - 0.5} -20.35 ${eyeX - 0.9} -20.75 Z`, null);
-      paint(c, '#2c4652', `M${eyeX - 0.25} -20.75 C${eyeX + 0.25} -20.78 ${eyeX + 0.3} -20.2 ${eyeX} -20.18 C${eyeX - 0.3} -20.2 ${eyeX - 0.3} -20.7 ${eyeX - 0.25} -20.75 Z`, null);
-      paint(c, '#0f1c24', `M${eyeX - 0.06} -20.7 C${eyeX + 0.12} -20.72 ${eyeX + 0.13} -20.32 ${eyeX} -20.3 C${eyeX - 0.1} -20.32 ${eyeX - 0.1} -20.66 ${eyeX - 0.06} -20.7 Z`, null);
-      line(c, '#fdfaf0', 0.34, `M${eyeX + 0.16} -20.66 L${eyeX + 0.24} -20.58`);
-      // Lower lid catch-light keeps the eye from reading as a painted dash.
-      line(c, '#e8dcc6', 0.32, `M${eyeX - 0.7} -19.95 C${eyeX - 0.2} -19.8 ${eyeX + 0.35} -19.85 ${eyeX + 0.75} -19.98`);
+      const socket = (x, w) => 'M' + (x - w) + ' -19.4 C' + (x - w) + ' -20.2 ' + (x + w) + ' -20.2 ' + (x + w) + ' -19.3 C' + (x + w) + ' -18.5 ' + (x - w) + ' -18.5 ' + (x - w) + ' -19.4 Z';
+      paint(c, 'rgba(66,48,40,.55)', socket(eyeX, 1.35), null);
+      if (!profile) paint(c, 'rgba(66,48,40,.5)', socket(quarter ? -2.3 : -2, 1.15), null);
+      line(c, '#44301f', 1, 'M' + (eyeX - 1.7) + ' -20.7 C' + (eyeX - 0.5) + ' -21.1 ' + (eyeX + 0.6) + ' -21 ' + (eyeX + 1.6) + ' -20.5');
+      line(c, '#44301f', 0.55, 'M' + (eyeX - 1.3) + ' -19.7 C' + (eyeX - 0.4) + ' -20.25 ' + (eyeX + 0.4) + ' -20.25 ' + (eyeX + 1.2) + ' -19.65');
+      paint(c, '#f6f2e4', 'M' + (eyeX - 0.9) + ' -19.5 C' + (eyeX - 0.6) + ' -18.95 ' + (eyeX + 0.6) + ' -18.95 ' + (eyeX + 0.95) + ' -19.45 C' + (eyeX + 0.5) + ' -19.1 ' + (eyeX - 0.5) + ' -19.1 ' + (eyeX - 0.9) + ' -19.5 Z', null);
+      paint(c, '#23404c', 'M' + (eyeX - 0.25) + ' -19.5 C' + (eyeX + 0.25) + ' -19.53 ' + (eyeX + 0.3) + ' -18.95 ' + eyeX + ' -18.93 C' + (eyeX - 0.3) + ' -18.95 ' + (eyeX - 0.3) + ' -19.45 ' + (eyeX - 0.25) + ' -19.5 Z', null);
+      paint(c, '#0c171f', 'M' + (eyeX - 0.06) + ' -19.45 C' + (eyeX + 0.12) + ' -19.47 ' + (eyeX + 0.13) + ' -19.07 ' + eyeX + ' -19.05 C' + (eyeX - 0.1) + ' -19.07 ' + (eyeX - 0.1) + ' -19.41 ' + (eyeX - 0.06) + ' -19.45 Z', null);
+      line(c, '#fffdf2', 0.36, 'M' + (eyeX + 0.16) + ' -19.41 L' + (eyeX + 0.25) + ' -19.32');
+      line(c, '#e8dcc6', 0.3, 'M' + (eyeX - 0.7) + ' -18.7 C' + (eyeX - 0.2) + ' -18.55 ' + (eyeX + 0.35) + ' -18.6 ' + (eyeX + 0.75) + ' -18.73');
       if (!profile) {
         const x = quarter ? -2.3 : -2;
-        line(c, '#6b5548', 0.85, `M${x - 1.2} -21.9 L${x + 1} -22.05`);
-        line(c, '#655248', 0.5, `M${x - 1.1} -21 C${x - 0.3} -21.55 ${x + 0.4} -21.5 ${x + 0.9} -21.1`);
-        paint(c, '#ede7d6', `M${x - 0.7} -20.75 C${x - 0.4} -20.2 ${x + 0.55} -20.2 ${x + 0.8} -20.7 C${x + 0.4} -20.35 ${x - 0.4} -20.35 ${x - 0.7} -20.75 Z`, null);
-        paint(c, '#2c4652', `M${x - 0.2} -20.75 C${x + 0.22} -20.78 ${x + 0.26} -20.2 ${x} -20.18 C${x - 0.26} -20.2 ${x - 0.26} -20.7 ${x - 0.2} -20.75 Z`, null);
-        paint(c, '#0f1c24', `M${x - 0.04} -20.7 C${x + 0.1} -20.72 ${x + 0.11} -20.32 ${x} -20.3 C${x - 0.09} -20.32 ${x - 0.09} -20.66 ${x - 0.04} -20.7 Z`, null);
-        line(c, '#fdfaf0', 0.32, `M${x + 0.13} -20.66 L${x + 0.2} -20.58`);
-        line(c, '#e8dcc6', 0.3, `M${x - 0.55} -19.95 C${x - 0.15} -19.82 ${x + 0.3} -19.86 ${x + 0.65} -19.97`);
+        line(c, '#44301f', 0.95, 'M' + (x - 1.3) + ' -20.7 L' + (x + 1.1) + ' -20.85');
+        line(c, '#44301f', 0.55, 'M' + (x - 1.1) + ' -19.7 C' + (x - 0.3) + ' -20.25 ' + (x + 0.4) + ' -20.2 ' + (x + 0.9) + ' -19.8');
+        paint(c, '#f4f0e2', 'M' + (x - 0.7) + ' -19.5 C' + (x - 0.4) + ' -18.95 ' + (x + 0.55) + ' -18.95 ' + (x + 0.8) + ' -19.45 C' + (x + 0.4) + ' -19.1 ' + (x - 0.4) + ' -19.1 ' + (x - 0.7) + ' -19.5 Z', null);
+        paint(c, '#23404c', 'M' + (x - 0.2) + ' -19.5 C' + (x + 0.22) + ' -19.53 ' + (x + 0.26) + ' -18.95 ' + x + ' -18.93 C' + (x - 0.26) + ' -18.95 ' + (x - 0.26) + ' -19.45 ' + (x - 0.2) + ' -19.5 Z', null);
+        paint(c, '#0c171f', 'M' + (x - 0.04) + ' -19.45 C' + (x + 0.1) + ' -19.47 ' + (x + 0.11) + ' -19.07 ' + x + ' -19.05 C' + (x - 0.09) + ' -19.07 ' + (x - 0.09) + ' -19.41 ' + (x - 0.04) + ' -19.45 Z', null);
+        line(c, '#fffdf2', 0.32, 'M' + (x + 0.13) + ' -19.41 L' + (x + 0.21) + ' -19.32');
+        line(c, '#e8dcc6', 0.3, 'M' + (x - 0.55) + ' -18.7 C' + (x - 0.15) + ' -18.57 ' + (x + 0.3) + ' -18.61 ' + (x + 0.65) + ' -18.72');
       }
       // Mouth: philtrum, upper lip shaded, lower lip lit, corner crease.
-      line(c, '#8b7163', 0.3, profile ? 'M5.4 -17 L5.5 -16.2' : 'M0.1 -17.1 L0.1 -16.3');
-      paint(c, '#9c7565', profile ? 'M2.8 -16.1 C3.6 -16.4 4.4 -16.4 5.2 -16.1 C4.4 -15.6 3.6 -15.6 2.8 -16.1 Z'
-        : 'M-1.9 -16 C-1.1 -16.5 0.6 -16.5 1.9 -15.9 C1.9 -15.5 1 -15.3 0 -15.3 C-1 -15.3 -1.7 -15.5 -1.9 -16 Z', null);
-      paint(c, '#c39a83', profile ? 'M3 -15.7 C3.8 -15.4 4.5 -15.4 5 -15.6 C4.4 -15 3.6 -15 3 -15.7 Z'
-        : 'M-1.5 -15.5 C-0.7 -15.1 0.8 -15.1 1.7 -15.5 C1.2 -14.8 -0.8 -14.8 -1.5 -15.5 Z', null);
-      line(c, '#6f564a', 0.45, profile ? 'M2.8 -15.9 L5.2 -15.9' : 'M-1.7 -15.8 C-0.5 -15.6 0.9 -15.6 1.9 -15.8');
-      line(c, '#8a6f61', 0.35, profile ? 'M5.2 -16.3 C5.5 -16.1 5.5 -15.6 5.2 -15.4' : 'M-1.9 -16.2 C-2.2 -16 -2.2 -15.5 -1.9 -15.3');
+      line(c, '#7f6355', 0.32, profile ? 'M5.4 -15.8 L5.5 -15' : 'M0.1 -15.9 L0.1 -15.1');
+      paint(c, '#8f6555', profile ? 'M2.8 -14.9 C3.6 -15.2 4.4 -15.2 5.2 -14.9 C4.4 -14.4 3.6 -14.4 2.8 -14.9 Z'
+        : 'M-1.9 -14.8 C-1.1 -15.3 0.6 -15.3 1.9 -14.7 C1.9 -14.3 1 -14.1 0 -14.1 C-1 -14.1 -1.7 -14.3 -1.9 -14.8 Z', null);
+      paint(c, '#cf9f88', profile ? 'M3 -14.5 C3.8 -14.2 4.5 -14.2 5 -14.4 C4.4 -13.8 3.6 -13.8 3 -14.5 Z'
+        : 'M-1.5 -14.3 C-0.7 -13.9 0.8 -13.9 1.7 -14.3 C1.2 -13.6 -0.8 -13.6 -1.5 -14.3 Z', null);
+      line(c, '#654c41', 0.45, profile ? 'M2.8 -14.7 L5.2 -14.7' : 'M-1.7 -14.6 C-0.5 -14.4 0.9 -14.4 1.9 -14.6');
+      line(c, '#7d6154', 0.35, profile ? 'M5.2 -15.1 C5.5 -14.9 5.5 -14.4 5.2 -14.2' : 'M-1.9 -15 C-2.2 -14.8 -2.2 -14.3 -1.9 -14.1');
       // Chin light and a short shadow under the lower lip.
-      paint(c, '#f0e2c9', profile ? 'M3 -14.4 C3.8 -14.2 4.4 -14.3 4.8 -14.6 C4.2 -13.9 3.4 -13.9 3 -14.4 Z'
-        : 'M-1.4 -14.6 C-0.6 -14.2 0.7 -14.2 1.5 -14.6 C1 -13.9 -0.9 -13.9 -1.4 -14.6 Z', null);
-      line(c, '#a98d79', 0.3, profile ? 'M3.2 -15 L4.6 -15' : 'M-1.2 -15.1 C-0.4 -14.9 0.6 -14.9 1.3 -15.1');
+      paint(c, '#f9e9cd', profile ? 'M3 -13.2 C3.8 -13 4.4 -13.1 4.8 -13.4 C4.2 -12.7 3.4 -12.7 3 -13.2 Z'
+        : 'M-1.4 -13.4 C-0.6 -13 0.7 -13 1.5 -13.4 C1 -12.7 -0.9 -12.7 -1.4 -13.4 Z', null);
+      line(c, '#9d7f6b', 0.3, profile ? 'M3.2 -13.8 L4.6 -13.8' : 'M-1.2 -13.9 C-0.4 -13.7 0.6 -13.7 1.3 -13.9');
       // A fine scar and stubble kept subordinate to the light planes of the face.
-      line(c, '#ab8c78', 0.28, 'M-3 -18.7 L-2.3 -17.3 M1 -14.3 L1.3 -13.7 M2.3 -14.6 L2.5 -14');
+      line(c, '#9d7d68', 0.28, 'M-3 -17.3 L-2.3 -15.9 M1 -13.1 L1.3 -12.5 M2.3 -13.4 L2.5 -12.8');
       // Cool moonlight along the lit edge of the face; the scene is night.
-      line(c, '#cfe6ec', 0.45, profile ? 'M-3 -24 C1 -25 5 -24 6 -22' : quarter ? 'M-4 -24 C-1 -25 4 -24 5 -22' : 'M-5 -24 C-3 -25 3 -25 5 -23');
+      line(c, RIM, 0.5, profile ? 'M-3 -23 C1 -24 5 -23 6 -21' : quarter ? 'M-4 -23 C-1 -24 4 -23 5 -21' : 'M-5 -23 C-3 -24 3 -24 5 -22');
     } else {
       // Back of the head: three hair planes and a nape shadow, not one flat blob.
-      paint(c, grad(c, -6, -25, 5, -13, ['#3b4652', '#2a323c', '#161c24']),
-        'M-5 -24 C-8 -21 -7 -17 -5 -15 L-3 -13 L0 -15 L3 -13 L6 -16 C7 -19 6 -23 5 -24 Z');
-      line(c, '#5c6772', 0.55, 'M-5 -21 C-6 -18 -5 -16 -4 -15 M-2 -20 L-2 -16 M2 -19 L3 -16');
-      line(c, '#49525c', 0.35, 'M-6.4 -22 C-7.2 -19 -6.6 -17 -5.8 -15.8 M-3.6 -23 L-4.4 -19 M3.4 -22 L4.2 -18');
-      line(c, '#77838d', 0.3, 'M-4 -22.6 L-4.6 -20 M1.4 -23 L1 -20.4');
-      paint(c, '#241e1c', 'M-3 -14.6 C-1 -13.8 1.6 -13.8 3.4 -14.6 L3 -15.6 L-2.6 -15.6 Z', null);
+      paint(c, grad(c, -6, -24, 5, -12, ['#2f3944', '#212932', '#0f151c']),
+        'M-5 -23 C-8 -20 -7 -16 -5 -14 L-3 -12 L0 -14 L3 -12 L6 -15 C7 -18 6 -22 5 -23 Z');
+      line(c, '#4a5560', 0.55, 'M-5 -20 C-6 -17 -5 -15 -4 -14 M-2 -19 L-2 -15 M2 -18 L3 -15');
+      line(c, '#3b444d', 0.35, 'M-6.4 -21 C-7.2 -18 -6.6 -16 -5.8 -14.8 M-3.6 -22 L-4.4 -18 M3.4 -21 L4.2 -17');
+      line(c, '#6f7b86', 0.3, 'M-4 -21.6 L-4.6 -19 M1.4 -22 L1 -19.4');
+      paint(c, '#1d1715', 'M-3 -13.6 C-1 -12.8 1.6 -12.8 3.4 -13.6 L3 -14.6 L-2.6 -14.6 Z', null);
       if (view === 'rearquarter') {
-        paint(c, '#c9b49c', 'M5 -21 C7 -22 8 -20 7 -18 L5 -17 Z', INK, 0.5);
-        paint(c, '#9a8472', 'M5.6 -20.3 C6.3 -20.5 6.8 -19.6 6.2 -18.9 C5.9 -19.3 5.6 -19.8 5.6 -20.3 Z', null);
-        line(c, '#866e60', 0.32, 'M6 -20 L6.4 -19');
+        paint(c, '#cbb49a', 'M5 -20 C7 -21 8 -19 7 -17 L5 -16 Z', INK, 0.5);
+        paint(c, '#927863', 'M5.6 -19.3 C6.3 -19.5 6.8 -18.6 6.2 -17.9 C5.9 -18.3 5.6 -18.8 5.6 -19.3 Z', null);
+        line(c, '#7a6254', 0.32, 'M6 -19 L6.4 -18');
       }
-      line(c, '#cfe6ec', 0.45, 'M-5 -24 C-8 -21 -7 -17 -5 -15');
+      line(c, RIM, 0.5, 'M-5 -23 C-8 -20 -7 -16 -5 -14');
     }
-    // A small cocked tricorn: crown -29, brim -24; face -23..-13 stays exposed.
+    // A low cocked tricorn: crown -28, brim -23.5; face -23..-12 stays exposed.
     // Painted as three folded planes plus a banded brim, so it holds up in silhouette.
-    paint(c, grad(c, -6, -29, 5, -23, ['#6f7d86', '#37424c', '#1a2732']),
-      'M-6 -25 C-6 -27 -4 -28 -2 -28 L0 -29 L4 -28 C5 -26 6 -25 7 -24 L-6 -24 Z', INK, 0.8);
-    paint(c, '#384753', 'M-6 -26 L-3 -27 L-1 -28 L0 -26 L5 -25 L4 -24 L-6 -24 Z', null);
-    paint(c, '#232f39', 'M0 -26 L5 -25 L4 -24 L0 -24 Z', null);
-    line(c, '#8797a0', 0.45, 'M-4 -27 L-2 -27.4 M1 -28 L3 -27.5');
-    line(c, '#e0eef2', 0.4, 'M-6 -27 C-4 -28.2 -2 -28.6 0 -29');
+    paint(c, grad(c, -6, -28, 5, -23, ['#566872', '#27333e', '#101b24']),
+      'M-6 -24 C-6 -26 -4 -27.4 -2 -27.4 L0 -28 L4 -27 C5 -25.4 6 -24.4 7 -23.6 L-6 -23.6 Z', INK, 0.85);
+    paint(c, '#28353f', 'M-6 -25 L-3 -26.2 L-1 -27 L0 -25.2 L5 -24.4 L4 -23.6 L-6 -23.6 Z', null);
+    paint(c, '#141e27', 'M0 -25.2 L5 -24.4 L4 -23.6 L0 -23.6 Z', null);
+    line(c, '#74838c', 0.45, 'M-4 -26.4 L-2 -26.8 M1 -27 L3 -26.5');
+    line(c, '#e6f3f6', 0.5, 'M-6 -26 C-4 -27.4 -2 -27.8 0 -28');
     // Hat band and cockade sit above the brim and read at 1x.
-    paint(c, '#2b3a45', 'M-5.6 -25.4 L5.6 -25.4 L5.4 -24.4 L-5.4 -24.4 Z', null);
-    line(c, '#a88f5e', 0.45, 'M-5.2 -24.9 L5 -24.9');
+    paint(c, '#1c2933', 'M-5.6 -24.9 L5.6 -24.9 L5.4 -23.9 L-5.4 -23.9 Z', null);
+    line(c, '#9c8557', 0.5, 'M-5.2 -24.4 L5 -24.4');
     // Brim: front plane, underside shadow separated by a bright wet edge.
-    paint(c, grad(c, -9, -25, 8, -22.6, ['#2e3b45', '#1c262f', '#131c24']),
-      'M-9 -25 C-5 -23 -4 -25 -1 -25 C2 -25 4 -22.9 8 -25 L9 -24 C6 -22.7 2 -23 0 -23.4 C-4 -23.2 -7 -22.8 -10 -24 Z', INK, 0.7);
-    paint(c, '#3d4c57', 'M-8.6 -24.6 C-5 -23.4 -3 -24.2 -1 -24.4 L0 -23.6 C-3 -23.4 -6 -23 -9 -24.2 Z', null);
-    line(c, '#92a5ae', 0.6, 'M-9 -24.8 C-6 -23.5 -4 -24.3 -2 -24.4 M3 -24.1 L7.5 -24.7');
-    line(c, '#d6eaf0', 0.45, 'M-9.4 -25.1 C-6 -23.8 -4 -24.6 -2 -24.7');
-    line(c, '#b39d68', 0.7, 'M-4 -25.2 C0 -25.8 2 -25.5 4 -25');
-    buckle(c, 2.8, -26.2, 1.6, 1.3);
+    paint(c, grad(c, -9, -24.4, 8, -22, ['#22303a', '#121c24', '#0b131a']),
+      'M-9 -24.4 C-5 -22.4 -4 -24.4 -1 -24.4 C2 -24.4 4 -22.3 8 -24.4 L9 -23.4 C6 -22.1 2 -22.4 0 -22.8 C-4 -22.6 -7 -22.2 -10 -23.4 Z', INK, 0.75);
+    paint(c, '#303f47', 'M-8.6 -24 C-5 -22.8 -3 -23.6 -1 -23.8 L0 -23 C-3 -22.8 -6 -22.4 -9 -23.6 Z', null);
+    line(c, '#8ea1a8', 0.65, 'M-9 -24.2 C-6 -22.9 -4 -23.7 -2 -23.8 M3 -23.5 L7.5 -24.1');
+    line(c, RIM, 0.55, 'M-9.4 -24.5 C-6 -23.2 -4 -24 -2 -24.1');
+    line(c, '#a8916a', 0.7, 'M-4 -24.6 C0 -25.2 2 -24.9 4 -24.4');
+    buckle(c, 2.8, -25.6, 1.6, 1.3);
   }
 
   function hem(c, side) {
     c.save(); c.scale(side, 1);
-    paint(c, grad(c, -8, 7, 1, 19, ['#5c7789', '#334d5e', '#1b2e3c']),
-      'M-8 6 C-5 7 -2 7 0 7 L-1 13 C-2 16 -1 18 -2 19 C-4 18 -6 20 -10 18 L-11 16 C-8 13 -8 9 -8 6 Z');
-    paint(c, '#465d6e', 'M-7 8 L-3 8 C-5 12 -3 15 -4 18 L-8 17 C-7 13 -8 11 -7 8 Z', null);
+    paint(c, grad(c, -8, 7, 1, 19, ['#274050', '#162a36', '#0a161f']),
+      'M-7.6 6 C-5 7 -2 7 0 7 L-1 11 C-2 13.6 -1 15.4 -2 16.4 C-4 15.6 -5.4 17 -9 15.4 L-9.6 13.6 C-8 11 -7.6 9 -7.6 6 Z');
+    paint(c, '#1e3644', 'M-6.6 8 L-3 8 C-5 11 -3 13.4 -4 15.8 L-7 15 C-6.4 12 -7.6 10.4 -6.6 8 Z', null);
     // Vertical drape folds from waist to hem instead of a flat skirt.
-    line(c, '#8c9eaa', 0.5, 'M-8 8 C-8 12 -9 15 -10 16 M-9 18 L-6 18.3');
-    line(c, '#1a2f3c', 0.6, 'M-2 9 C-4 13 -3 16 -2.5 18');
-    line(c, '#16303e', 0.5, 'M-5.6 8.6 C-6.4 12 -5.8 15.4 -6.4 18');
-    line(c, '#93a9b6', 0.32, 'M-8.4 9 C-8.8 12 -9.4 15 -10.2 16.6');
-    line(c, '#748a98', 0.3, 'M-5 12 L-5.4 14 M-8 15 L-8.4 16.3');
+    line(c, '#6d8794', 0.5, 'M-8 8 C-8 12 -9 15 -10 16');
+    line(c, '#0a1620', 0.7, 'M-2 9 C-4 13 -3 16 -2.5 18');
+    line(c, '#08141d', 0.6, 'M-5.6 8.6 C-6.4 12 -5.8 15.4 -6.4 18');
     // The hem underside is richer in shadow — cloth thickness reads at 1x.
-    paint(c, '#132631', 'M-2 19 C-4 18 -6 20 -10 18 L-10 19.4 C-7 21 -4 19.6 -2 20.6 Z', null);
+    paint(c, '#061019', 'M-2 16.4 C-4 15.6 -5.4 17 -9 15.4 L-9 16.8 C-6.4 18.2 -4 17.2 -2 18 Z', null);
+    line(c, WARM, 0.55, 'M-9.4 15 C-6.4 16.6 -3.6 15.4 -2.4 16.8');
     c.restore();
   }
   function leg(c) {
     // Trouser: thigh volume tapers to a knee break, then a separate shin panel.
-    paint(c, grad(c, -3, 0, 3, 9, ['#71808f', '#3a4754', '#1f2933']),
+    paint(c, grad(c, -3, 0, 3, 9, ['#31404d', '#1c2731', '#0b1218']),
       'M-3 0 C-1 -1.2 2 -1.2 3 0 L2.6 4.6 L3 9 C1 10 -2 10 -3 9 L-2.4 4.6 Z');
-    paint(c, '#55636f', 'M-2 1 L0 0 L0.5 4 L-1.5 7 L-2 9 Z', null);
+    paint(c, '#25323d', 'M-2 1 L0 0 L0.5 4 L-1.5 7 L-2 9 Z', null);
     // Knee break and the cloth pucker above it — what makes a leg bend, not a tube.
-    line(c, '#141f2a', 0.65, 'M-2.7 4.7 C-1 3.8 1 3.8 2.7 4.7');
-    line(c, '#9aa3aa', 0.45, 'M-2.1 5.3 L1.6 5.3');
-    line(c, '#1b2733', 0.45, 'M-2.2 3.4 C-1 3.9 0.8 3.9 2 3.5');
-    line(c, '#8fa0ac', 0.32, 'M-2.4 3.1 C-1 3.6 0.8 3.6 2.2 3.2');
-    line(c, '#222d37', 0.45, 'M1.6 1 L1.8 4 M-0.4 7 L0 8');
+    line(c, '#08111a', 0.75, 'M-2.7 4.7 C-1 3.8 1 3.8 2.7 4.7');
+    line(c, '#7c868d', 0.45, 'M-2.1 5.3 L1.6 5.3');
+    line(c, '#0d151e', 0.45, 'M-2.2 3.4 C-1 3.9 0.8 3.9 2 3.5');
+    line(c, '#1a232d', 0.45, 'M1.6 1 L1.8 4 M-0.4 7 L0 8');
     // Down-lit seam on the outer thigh.
-    line(c, '#b6c6cf', 0.35, 'M-2.4 0.6 C-2.6 2 -2.5 3.2 -2.3 4.2');
+    line(c, '#96a7b2', 0.45, 'M-2.4 0.6 C-2.6 2 -2.5 3.2 -2.3 4.2');
   }
   function boot(c) {
     // Leather boot: shaft, instep break, toe box, welt and a wet sole highlight.
-    paint(c, grad(c, -3, 0, 3, 9, ['#6a564a', '#332f31', '#121b23']),
-      'M-2.9 0 C-1 0 1 0 2.8 0 L2.4 4 C3.2 5 5 5.5 5.5 7 C5.8 8 4.5 9 1 9 L-3 9 C-4 7 -3.5 5 -3 4 Z', INK, 0.75);
+    paint(c, grad(c, -3, 0, 3, 9, ['#4c3c33', '#241f20', '#0a0f14']),
+      'M-2.9 0 C-1 0 1 0 2.8 0 L2.4 4 C3.2 5 5 5.5 5.5 7 C5.8 8 4.5 9 1 9 L-3 9 C-4 7 -3.5 5 -3 4 Z', INK, 0.85);
     // Instep crease and toe cap separate the foot into planes.
-    paint(c, '#7d6553', 'M-2.6 1.2 C-1.4 0.6 0.8 0.6 2.4 1.2 L2.1 3.6 C0.4 3 2 3.4 -2.4 3.4 Z', null);
-    paint(c, '#8a7563', 'M1.2 5.4 C2.6 5.2 4.4 5.8 5.2 6.8 C4.4 7.8 2.6 8.2 1 8.1 Z', null);
-    line(c, '#1a222a', 0.5, 'M-2.4 4.1 C0 3.3 2.6 3.7 4.4 4.9');
+    paint(c, '#5b4a3c', 'M-2.6 1.2 C-1.4 0.6 0.8 0.6 2.4 1.2 L2.1 3.6 C0.4 3 2 3.4 -2.4 3.4 Z', null);
+    paint(c, '#6a5849', 'M1.2 5.4 C2.6 5.2 4.4 5.8 5.2 6.8 C4.4 7.8 2.6 8.2 1 8.1 Z', null);
+    line(c, '#0c1218', 0.6, 'M-2.4 4.1 C0 3.3 2.6 3.7 4.4 4.9');
     // Welt and sole — a light line here is what stops the foot floating.
-    paint(c, '#17212a', 'M-3.8 7 C-1 8 3 8 5.5 7 L5.5 9 C2 10 -1 10 -3.7 9 Z', INK, 0.55);
-    line(c, '#7d8586', 0.55, 'M-3.5 8.4 C-1 9 2 9 5.2 8.2');
-    line(c, '#9fb7bd', 0.3, 'M-3.2 8.9 C-1 9.5 2 9.5 5 8.8');
-    paint(c, '#475158', 'M-2 1 L-0.8 1 L-0.9 5 L-2.5 6 Z', null);
-    line(c, '#a78e69', 0.4, 'M-1.5 1.5 L1 2.3 M1 1.5 L-1.4 2.3 M-1.5 3 L1 3.8 M1 3 L-1.5 3.8 M-1.4 4.5 L0.9 5.1');
-    line(c, '#76818a', 0.45, 'M1 6 C2.5 5.8 4 6.5 4.5 7');
-    line(c, '#a6b6bf', 0.35, 'M2.2 6.2 C3.4 6.1 4.4 6.5 5 7.1');
+    paint(c, '#0a1219', 'M-3.8 7 C-1 8 3 8 5.5 7 L5.5 9 C2 10 -1 10 -3.7 9 Z', INK, 0.6);
+    line(c, '#6f7d81', 0.55, 'M-3.5 8.4 C-1 9 2 9 5.2 8.2');
+    paint(c, '#2c343b', 'M-2 1 L-0.8 1 L-0.9 5 L-2.5 6 Z', null);
+    line(c, '#8a7154', 0.4, 'M-1.5 1.5 L1 2.3 M1 1.5 L-1.4 2.3 M-1.5 3 L1 3.8 M1 3 L-1.5 3.8');
+    line(c, '#5c666e', 0.45, 'M1 6 C2.5 5.8 4 6.5 4.5 7');
     buckle(c, 1.2, 0.7, 1.3, 1.1);
   }
   function cape(c) {
-    paint(c, grad(c, -13, -10, 1, 10, ['#6d8496', '#354755', '#161f2b']),
-      'M-4 -11 C-9 -12 -13 -9 -13 -6 C-13 -3 -15 1 -15 4 L-12 3 L-13 7 C-10 6 -8 8 -5 6 C-4 3 -1 1 0 -3 L0 -8 Z', INK, 0.85);
-    paint(c, '#516778', 'M-6 -9 C-10 -8 -10 -4 -11 0 L-9 2 L-7 0 C-5 -3 -3 -4 -2 -7 Z', null);
+    paint(c, grad(c, -13, -10, 1, 10, [CAPE_HI, CAPE, CAPE_DARK]),
+      'M-4 -11 C-9 -12 -13 -9 -13 -6 C-13 -3 -15 1 -15 4 L-12 3 L-13 7 C-10 6 -8 8 -5 6 C-4 3 -1 1 0 -3 L0 -8 Z', INK, 0.9);
+    paint(c, '#35505f', 'M-6 -9 C-10 -8 -10 -4 -11 0 L-9 2 L-7 0 C-5 -3 -3 -4 -2 -7 Z', null);
     // Deep inner fold and the far edge turned away from the light.
-    paint(c, '#1a2733', 'M-13 -6 C-13 -3 -15 1 -15 4 L-13.4 3.6 C-13.4 0.6 -12 1 -11.6 -2 Z', null);
-    line(c, '#9dabb5', 0.65, 'M-12 -7 C-11 -9 -8 -10 -5 -10');
-    line(c, '#22323f', 0.7, 'M-9 -5 C-10 -1 -11 2 -12 4 M-5 -7 C-5 -3 -7 2 -7 5');
+    paint(c, '#0f1b26', 'M-13 -6 C-13 -3 -15 1 -15 4 L-13.4 3.6 C-13.4 0.6 -12 1 -11.6 -2 Z', null);
+    line(c, '#8fa0ac', 0.7, 'M-12 -7 C-11 -9 -8 -10 -5 -10');
+    line(c, '#16242f', 0.7, 'M-9 -5 C-10 -1 -11 2 -12 4 M-5 -7 C-5 -3 -7 2 -7 5');
     // Vertical wool ribs: the cape reads as fabric with weight, not a flag.
-    line(c, '#3d5263', 0.45, 'M-10.6 -8 C-11.4 -4.6 -12.2 -1.4 -12.8 2.4 M-7.4 -9 C-7.8 -5 -8.6 -1.4 -9 2.6');
-    line(c, '#788b99', 0.35, 'M-11 1 L-11.8 3 M-9.7 5 L-8.5 5.4');
+    line(c, '#2b4152', 0.5, 'M-10.6 -8 C-11.4 -4.6 -12.2 -1.4 -12.8 2.4 M-7.4 -9 C-7.8 -5 -8.6 -1.4 -9 2.6');
     // Moonlit rim along the shoulder and the hanging edge.
-    line(c, '#d5e9ef', 0.45, 'M-12.6 -7.4 C-11.6 -9.4 -8.6 -10.4 -5.2 -10.4 M-15 4 L-13.2 6.8');
-    paint(c, '#8a6b43', 'M-4 -9 C-3 -10 -1 -10 0 -9 L0 -7 C-1 -6 -3 -7 -4 -8 Z', INK, 0.5);
-    line(c, '#e7c486', 0.5, 'M-2.8 -8.7 L-1.2 -8.7');
+    line(c, RIM, 0.55, 'M-12.6 -7.4 C-11.6 -9.4 -8.6 -10.4 -5.2 -10.4 M-15 4 L-13.2 6.8');
+    paint(c, '#7c5f3c', 'M-4 -9 C-3 -10 -1 -10 0 -9 L0 -7 C-1 -6 -3 -7 -4 -8 Z', INK, 0.5);
+    line(c, '#efcb8e', 0.55, 'M-2.8 -8.7 L-1.2 -8.7');
   }
   function scarf(c) {
-    paint(c, grad(c, -5, -12, 5, -7, ['#f6d895', '#cf9f56', '#8a6035']),
+    paint(c, grad(c, -5, -12, 5, -7, ['#f8dc9c', '#d1a258', '#87602f']),
       'M-5 -12 C-2 -10 3 -10 5 -12 L6 -9 C3 -7 -2 -7 -5 -9 Z', INK, 0.6);
     // Knit ribs and the rolled edge make the scarf read as wool around the throat.
-    line(c, '#f5d799', 0.65, 'M-4 -10.7 C-1 -9.2 2 -9.2 4.5 -10.8');
-    line(c, '#967140', 0.5, 'M-3 -8.8 C0 -8.1 2 -8.5 4 -9.2');
+    line(c, '#fbe0a2', 0.7, 'M-4 -10.7 C-1 -9.2 2 -9.2 4.5 -10.8');
+    line(c, '#8e6a3a', 0.5, 'M-3 -8.8 C0 -8.1 2 -8.5 4 -9.2');
     line(c, '#a87c41', 0.32, 'M-3.4 -11.2 L-2.8 -8.6 M-1.2 -10.6 L-0.9 -8.2 M1 -10.6 L1.2 -8.4 M3.2 -11.2 L3 -8.8');
-    paint(c, '#f0cd88', 'M-5.4 -11.9 C-2.6 -10.4 2.6 -10.4 5.4 -11.9 L5.6 -11.2 C2.6 -9.7 -2.6 -9.7 -5.6 -11.2 Z', null);
+    paint(c, '#f6d492', 'M-5.4 -11.9 C-2.6 -10.4 2.6 -10.4 5.4 -11.9 L5.6 -11.2 C2.6 -9.7 -2.6 -9.7 -5.6 -11.2 Z', null);
   }
   function scarfTail(c) {
-    paint(c, grad(c, 0, 0, 5, 11, ['#e0bd79', '#b58849', '#6d4b31']),
+    paint(c, grad(c, 0, 0, 5, 11, ['#e6c47f', '#b58849', '#66462d']),
       'M0 0 L3 -0.5 C3 2 2 3 3 5 C4 7 6 8 5 11 L1 11.5 C2 8 0 6 0 4 Z', INK, 0.55);
-    line(c, '#f2cd86', 0.45, 'M1.4 1 C1 4 3.7 8 3 10');
+    line(c, '#f8d68c', 0.5, 'M1.4 1 C1 4 3.7 8 3 10');
     // Ribs run along the tail; frayed ends catch the lantern.
     line(c, '#a97e44', 0.3, 'M1 1.4 C1.2 4.4 3.2 7.6 2.6 10.4 M2.2 0.6 C2.4 3.6 4.4 6.8 3.8 10.2');
-    line(c, '#634933', 0.3, 'M1.5 10 L1.1 12 M2.7 10.4 L2.3 12 M4 10.2 L3.8 11.8');
+    line(c, '#5c432d', 0.3, 'M1.5 10 L1.1 12 M2.7 10.4 L2.3 12 M4 10.2 L3.8 11.8');
   }
   function lantern(c) {
     // The brass cage and warm glass are baked; glow never becomes a frame gradient.
-    line(c, '#bea572', 0.85, 'M-2 -1 C-4 -5 4 -5 2 -1');
-    paint(c, '#544536', 'M-3 0 L-1 -1.5 L1 -1.5 L3 0 L3.5 1 L-3.5 1 Z', INK, 0.55);
-    paint(c, grad(c, -2, 1, 2, 7, ['#fff0b0', '#f5c267', '#c57f36']),
-      'M-2.5 1 L2.5 1 L3 7 C1 8 -1 8 -3 7 Z', '#5a4330', 0.5);
-    paint(c, '#fff6ca', 'M-0.6 6 C-2 4 0 4 0.5 2 C0.2 4 2 5 0.5 6 Z', null);
-    for (const x of [-2.7, 0, 2.7]) line(c, '#9a7847', 0.55, `M${x} 1 L${x} 7`);
-    paint(c, '#8d7049', 'M-3.3 7 L3.3 7 L3.5 8.5 C1 9.2 -1 9.2 -3.5 8.5 Z', INK, 0.6);
-    line(c, '#f8d999', 0.45, 'M-2.4 0.4 L2.1 0.4 M-2.6 8 L2.4 8');
-    line(c, '#fff4ca', 0.5, 'M-1.4 2 L-1.5 5');
+    line(c, '#a98f5e', 0.85, 'M-2 -1 C-4 -5 4 -5 2 -1');
+    paint(c, '#372c21', 'M-3 0 L-1 -1.5 L1 -1.5 L3 0 L3.5 1 L-3.5 1 Z', INK, 0.55);
+    paint(c, grad(c, -2, 1, 2, 7, ['#ffefb0', '#f5bd63', '#a86526']),
+      'M-2.3 1 L2.3 1 L2.7 7 C1 7.8 -1 7.8 -2.7 7 Z', '#4a3627', 0.55);
+    paint(c, '#fffbd2', 'M-0.5 5.6 C-1.7 3.8 0 3.8 0.4 2 C0.2 3.8 1.8 4.6 0.4 5.6 Z', null);
+    for (const x of [-2.4, 0, 2.4]) line(c, '#8f7040', 0.55, 'M' + x + ' 1 L' + x + ' 7');
+    paint(c, '#6e5531', 'M-3 7 L3 7 L3.2 8.4 C1 9 -1 9 -3.2 8.4 Z', INK, 0.6);
+    line(c, '#f8d999', 0.5, 'M-2.2 0.4 L2 0.4 M-2.4 7.9 L2.2 7.9');
+    line(c, '#fff8d2', 0.55, 'M-1.2 2 L-1.3 5');
   }
   function sleeve(c, fore) {
     // Upper arm is a tapered tube with a rolled shoulder cap; forearm has a cuffroll.
-    paint(c, grad(c, 0, -2, 10, 4, ['#8ba1ae', '#4d6a7c', '#2a3e4d']), fore
+    paint(c, grad(c, 0, -2, 10, 4, ['#40606f', '#223d4c', '#0f1e28']), fore
       ? 'M6 1 C8 0 11 -0.5 14 0 L14 3 C11 4 8 5 6 4 Z'
       : 'M0 -6 C2 -6.5 4 -6 5 -4 L8 1 L8 4 C5 6 2 4 0 3 C-1.4 -1 -1.4 -4 0 -6 Z');
     if (!fore) {
       // Shoulder cap: a separate rounded panel so the joint has volume, kept quieter than the torso.
-      paint(c, grad(c, 0, -7, 5, -1, ['#7b94a3', '#48626f', '#2c4050']),
-        'M-0.6 -6.4 C2 -7 4.6 -6.2 5.6 -4 C4.4 -1.4 2 0 0.4 -0.4 C-0.8 -2.4 -1.2 -5 -0.6 -6.4 Z', INK, 0.55);
-      line(c, '#a9c2ce', 0.45, 'M-0.2 -6 C2 -6.8 4.2 -6 5.2 -4');
+      paint(c, grad(c, 0, -7, 5, -1, ['#43616f', '#22404e', '#12242e']),
+        'M-0.6 -6.4 C2 -7 4.6 -6.2 5.6 -4 C4.4 -1.4 2 0 0.4 -0.4 C-0.8 -2.4 -1.2 -5 -0.6 -6.4 Z', INK, 0.6);
+      line(c, '#9cb9c5', 0.5, 'M-0.2 -6 C2 -6.8 4.2 -6 5.2 -4');
       // Elbow crease where the two segments meet.
-      line(c, '#1d2f3c', 0.55, 'M6.6 -0.4 C7 1.4 6.6 3 5.2 4.4');
+      line(c, '#122530', 0.65, 'M6.6 -0.4 C7 1.4 6.6 3 5.2 4.4');
     }
-    line(c, MOON, 0.45, fore ? 'M7 1.2 L12 0.9' : 'M1 -1 L4 -0.4');
+    line(c, RIM_SOFT, 0.45, fore ? 'M7 1.2 L12 0.9' : 'M1 -1 L4 -0.4');
     if (fore) {
-      paint(c, '#263845', 'M11 -0.1 L13.8 0 L13.5 3.5 L11.5 3.8 Z');
-      line(c, '#a69c82', 0.45, 'M12 0.3 L12.4 3.1');
+      paint(c, '#1a2b36', 'M11 -0.1 L13.8 0 L13.5 3.5 L11.5 3.8 Z');
+      line(c, '#98c7d0', 0.45, 'M12 0.3 L12.4 3.1');
       // Two cloth folds across the forearm, lit on the upper edge.
-      line(c, '#21323f', 0.45, 'M7.6 0.2 C8 1.5 7.6 2.6 7.2 3.4 M9.2 0.1 C9.6 1.4 9.3 2.6 8.9 3.5');
-      line(c, '#9db3bf', 0.3, 'M8.1 0.4 C8.4 1.4 8.1 2.3 7.8 3.1');
-    } else line(c, '#20313f', 0.6, 'M5 0 L4 2 L6 4');
+      line(c, '#12232e', 0.5, 'M7.6 0.2 C8 1.5 7.6 2.6 7.2 3.4 M9.2 0.1 C9.6 1.4 9.3 2.6 8.9 3.5');
+    } else line(c, '#142430', 0.65, 'M5 0 L4 2 L6 4');
   }
   function glove(c, support) {
     // Glove: wrist band, back of hand, then knuckles separated by dark seams.
-    paint(c, grad(c, -1, -1, 3, 4, ['#8d7059', '#4d423a', '#262f32']), support
+    paint(c, grad(c, -1, -1, 3, 4, ['#86674f', '#463b33', '#1f282b']), support
       ? 'M-2 0 C-1 -1 1 -1 3 0 L3.5 2 C2 3 0 3.5 -2 2 Z'
       : 'M-1 0 C0 -1 2 -1 3.5 0 L4 2 L3 3 L2 5 C0 5 -1 3 -1 2 Z', INK, 0.6);
     line(c, '#b89b72', 0.4, 'M0 0 L1 0.5 M1.7 0 L2.6 0.7');
     // Knuckle shadow and finger seams read as a hand, not a mitten.
-    line(c, '#1d2427', 0.4, support ? 'M-0.6 1.9 L2.2 1.9 M0.4 1.4 L0.6 2.4' : 'M-0.4 2.1 L2.6 2.1 M0.2 2.5 L0.4 3.6 M1.3 2.5 L1.4 3.8');
+    line(c, '#141b1e', 0.45, support ? 'M-0.6 1.9 L2.2 1.9 M0.4 1.4 L0.6 2.4' : 'M-0.4 2.1 L2.6 2.1 M0.2 2.5 L0.4 3.6 M1.3 2.5 L1.4 3.8');
     paint(c, '#a4855f', support ? 'M-1.6 0.2 L-1.9 1.8 L-0.6 1.9 Z' : 'M-0.6 0.2 L-1 1.9 L0.2 2 Z', null);
-    line(c, '#222627', 0.45, 'M0 2 L2.8 2');
+    line(c, '#1a1f20', 0.45, 'M0 2 L2.8 2');
   }
   function idleArm(c) {
-    paint(c, grad(c, -3, 0, 2, 13, ['#5e798b', '#354e60', '#233441']),
+    paint(c, grad(c, -3, 0, 2, 13, ['#2e4a59', '#1c3341', '#0c1922']),
       'M-2 0 C0 -1 2 0 2 3 L1 7 L0 11 L-3 11 L-3.7 7 C-4 3 -3 1 -2 0 Z');
-    line(c, '#8097a7', 0.6, 'M-2.5 2 L-3 5 M-2.7 7 L-2.2 9');
-    paint(c, '#4c3d34', 'M-3 10 L0 10 L1 12 C1 14 -1 14 -2 13 L-3 12 Z');
-    line(c, '#aa8c67', 0.4, 'M-1.6 11 L-1.1 12.5');
+    line(c, '#7d95a3', 0.6, 'M-2.5 2 L-3 5 M-2.7 7 L-2.2 9');
+    paint(c, '#3a2d25', 'M-3 10 L0 10 L1 12 C1 14 -1 14 -2 13 L-3 12 Z');
+    line(c, '#a98b66', 0.4, 'M-1.6 11 L-1.1 12.5');
   }
 
   // Six explicitly drawn outlines; evolution changes metalwork and silhouette.
@@ -395,53 +410,55 @@ window.Character = (function () {
   };
   function weapon(c, key, evolved) {
     const outline = weaponOutlines[key][evolved ? 'evolved' : 'base'];
-    const steel = grad(c, 0, -4, 0, 4, ['#bfd0d5', '#6b7f88', '#273a46']);
-    paint(c, steel, outline, '#111c24', 0.75);
+    // Dark gunmetal with one bright top edge: the gun must not melt into the coat.
+    const steel = grad(c, 0, -4, 0, 4, [STEEL_HI, STEEL, STEEL_DARK]);
+    paint(c, steel, outline, '#0b151c', 0.8);
+    line(c, '#e4eef0', 0.5, 'M12 -2.6 L22 -2.6');
     if (key === 'pistol') {
-      paint(c, '#71503a', evolved ? 'M9 1 L13 3 L11 8 L7 6 Z' : 'M11 1 L14 3 L11 7 L8 5.5 Z', '#392e27', 0.45);
-      line(c, '#c39864', 0.5, 'M11 3 C10 4 10 5 9 5.5');
-      paint(c, evolved ? '#987641' : '#536571', 'M12 -2.5 C13 -4 17 -3 18 -2 L18 0.7 C16 2 13 1 12 0 Z', INK, 0.5);
+      paint(c, grad(c, 8, 0, 14, 8, ['#7a5638', '#4a3524']), evolved ? 'M9 1 L13 3 L11 8 L7 6 Z' : 'M11 1 L14 3 L11 7 L8 5.5 Z', '#2e241d', 0.5);
+      line(c, '#a97c4d', 0.5, 'M11 3 C10 4 10 5 9 5.5');
+      paint(c, evolved ? '#8a6a3a' : '#3f505c', 'M12 -2.5 C13 -4 17 -3 18 -2 L18 0.7 C16 2 13 1 12 0 Z', INK, 0.5);
       line(c, '#c3d0d1', 0.45, 'M13 -2.1 L17 -2 M14 -1.4 L14 0 M16 -1.4 L16 0');
       line(c, BRASS, 0.7, 'M14 2 C14 5 17 5 17 2');
-      line(c, '#e9d9b1', 0.4, 'M19 -2 L23 -2');
+      line(c, '#f5e6c2', 0.45, 'M19 -2 L23 -2');
       if (evolved) {
-        paint(c, '#ddbf74', 'M12 -4 L13 -6 L15 -4 Z', INK, 0.45);
-        line(c, '#f3d99c', 0.5, 'M18 -3.1 C18.5 -1 20 -2 20.5 -0.5');
-        paint(c, '#7096a5', 'M8 0 L10 -1 L11 1 L9 2 Z', '#edcf86', 0.4);
+        paint(c, '#e2c47a', 'M12 -4 L13 -6 L15 -4 Z', INK, 0.45);
+        line(c, '#fbe4ac', 0.5, 'M18 -3.1 C18.5 -1 20 -2 20.5 -0.5');
+        paint(c, '#6f97a6', 'M8 0 L10 -1 L11 1 L9 2 Z', '#edcf86', 0.4);
       }
     } else if (key === 'shotgun') {
-      paint(c, grad(c, 0, 1, 4, 6, ['#93734d', '#63472f', '#3d312b']),
+      paint(c, grad(c, 0, 1, 4, 6, ['#8d6d48', '#5d442c', '#332a25']),
         evolved ? 'M-1 1 C2 1 4 2 7 1 L9 3 L3 7 L-1 4 L2 2 Z' : 'M0 1 L7 1 L8 3 L4 6 L0 4 L3 2 Z', INK, 0.5);
-      paint(c, '#7f5c38', 'M11 1 L19 1 L19 3 L11 3 Z', INK, 0.45);
-      line(c, '#be9a60', 0.5, 'M12 1.5 L18 1.5 M13 2 L13 2.6 M15 2 L15 2.6 M17 2 L17 2.6');
-      line(c, '#182a35', 0.55, 'M10 -0.6 L24 -0.6');
-      line(c, '#d4e0df', 0.5, 'M11 -2.3 L23 -2.3');
-      line(c, '#b59459', 0.7, 'M7 3 C6 6 10 6 10 3');
+      paint(c, '#6d4f30', 'M11 1 L19 1 L19 3 L11 3 Z', INK, 0.45);
+      line(c, '#c19c62', 0.5, 'M12 1.5 L18 1.5 M13 2 L13 2.6 M15 2 L15 2.6 M17 2 L17 2.6');
+      line(c, '#0f202a', 0.6, 'M10 -0.6 L24 -0.6');
+      line(c, '#dcecea', 0.55, 'M11 -2.3 L23 -2.3');
+      line(c, '#bb9858', 0.7, 'M7 3 C6 6 10 6 10 3');
       if (evolved) {
-        paint(c, '#c8a466', 'M9 -4 L11 -4 L11 3 L9 3 Z', INK, 0.4);
-        paint(c, '#c5a163', 'M20 -4 L22 -4 L22 3 L20 3 Z', INK, 0.4);
-        line(c, '#eee0b4', 0.4, 'M14 -3 L17 -3 M14 -2.2 L17 -2.2');
-        paint(c, '#aa7645', 'M-1 3 L1 3 L2 5 L1 6 Z', INK, 0.4);
+        paint(c, '#cda867', 'M9 -4 L11 -4 L11 3 L9 3 Z', INK, 0.4);
+        paint(c, '#caa564', 'M20 -4 L22 -4 L22 3 L20 3 Z', INK, 0.4);
+        line(c, '#f6e8bc', 0.4, 'M14 -3 L17 -3 M14 -2.2 L17 -2.2');
+        paint(c, '#a87645', 'M-1 3 L1 3 L2 5 L1 6 Z', INK, 0.4);
       }
     } else {
-      paint(c, '#684932', 'M2 1 L7 1 L8 3 L4 5 L1 3 Z', INK, 0.45);
-      paint(c, '#3a4d56', evolved ? 'M10 2 L16 3 L17 8 L12 9 Z' : 'M11 2 L15 2 L15 6.5 L12 7 Z', INK, 0.5);
+      paint(c, '#5d4230', 'M2 1 L7 1 L8 3 L4 5 L1 3 Z', INK, 0.45);
+      paint(c, '#2c3d47', evolved ? 'M10 2 L16 3 L17 8 L12 9 Z' : 'M11 2 L15 2 L15 6.5 L12 7 Z', INK, 0.5);
       line(c, '#9caeae', 0.45, 'M12 3 L13 6 M13.5 3 L14.5 6');
       paint(c, '#a28450', 'M8 -1 L14 -1 L14 1.3 L8 1.3 Z', INK, 0.4);
-      line(c, '#e0c58c', 0.4, 'M9 -0.4 L12 -0.4');
-      line(c, '#d3e0df', 0.5, 'M16 -1.5 L23 -1.5');
-      line(c, '#172733', 0.65, 'M18 0 L23 0');
-      line(c, '#ad8e57', 0.65, 'M8 3 C7 5 10 5 10 3');
+      line(c, '#e6cd94', 0.45, 'M9 -0.4 L12 -0.4');
+      line(c, '#dceae8', 0.55, 'M16 -1.5 L23 -1.5');
+      line(c, '#101f29', 0.7, 'M18 0 L23 0');
+      line(c, '#b4915a', 0.65, 'M8 3 C7 5 10 5 10 3');
       if (evolved) {
-        paint(c, '#486b7d', 'M12 -4 L13 -6 L16 -6 L17 -3 Z', INK, 0.5);
-        line(c, '#c0e3e5', 0.5, 'M13 -5 L15.5 -5');
-        paint(c, '#c09a58', 'M17 -3 L19 -3 L19 1.5 L17 1.5 Z', INK, 0.4);
-        line(c, '#ebcf8f', 0.6, 'M12 7 L15 6.5');
+        paint(c, '#436c7e', 'M12 -4 L13 -6 L16 -6 L17 -3 Z', INK, 0.5);
+        line(c, '#c6eaec', 0.5, 'M13 -5 L15.5 -5');
+        paint(c, '#c49d58', 'M17 -3 L19 -3 L19 1.5 L17 1.5 Z', INK, 0.4);
+        line(c, '#f2d898', 0.6, 'M12 7 L15 6.5');
       }
     }
     // All barrels terminate exactly at 24, even though stocks differ in length.
-    line(c, '#101e28', 1, 'M24 -1.8 L24 0.8');
-    line(c, '#e0e4d8', 0.4, 'M22 -1.8 L23 -1.8');
+    line(c, '#0a131a', 1, 'M24 -1.8 L24 0.8');
+    line(c, '#eff3ea', 0.45, 'M22 -1.8 L23 -1.8');
   }
   function flash(c) {
     const g = c.createRadialGradient(0, 0, 0, 0, 0, 10);
@@ -459,7 +476,9 @@ window.Character = (function () {
     const add = (name, dx, dy, w, h, painter) => specs.push({ name, dx, dy, w, h, painter });
     for (const view of views) {
       add('torso-' + view, -16, -12, 32, 26, c => torso(c, view));
-      add('head-' + view, -15, -32, 30, 23, c => head(c, view));
+      // The head box is four units shorter than the 2026-10-25 pass: the skull and hat
+      // shrink toward adult proportions, which is what stopped the hunter reading chibi.
+      add('head-' + view, -15, -30, 30, 21, c => head(c, view));
     }
     add('hem-left', -14, 2, 28, 24, c => hem(c, 1));
     add('hem-right', -14, 2, 28, 24, c => hem(c, -1));
@@ -539,6 +558,9 @@ window.Character = (function () {
     const crouch = motion && dash ? 1 : 0;
     const brace = motion ? clamp(recoil, 0, 2.5) * 0.16 + Math.abs(stance) * 0.35 : 0;
     const dashLean = dash ? -0.22 : 0;
+    // Walk cycle detail: the hips lead, the shoulders counter, the knee of the forward
+    // leg bends and the boot rolls from heel to toe. Four small numbers, four readable cues.
+    const swing = motion && moving && !dash ? Math.sin(phase) : 0;
     return {
       facing: directions[index], frame: views[frame], mirror, aim, rearGun: sin < -0.25,
       weapon: Object.prototype.hasOwnProperty.call(weaponOutlines, p.weapon) ? p.weapon : 'pistol',
@@ -549,6 +571,13 @@ window.Character = (function () {
       crouch,
       brace,
       stepLeft: stride, stepRight: stride ? -stride : 0,
+      hipSway: motion ? -swing * 0.5 : 0,
+      twist: motion ? swing * 0.55 : 0,
+      armSwing: motion ? -swing * 0.08 : 0,
+      kneeLeft: motion ? Math.max(0, stride) * 0.55 : 0,
+      kneeRight: motion ? Math.max(0, -stride) * 0.55 : 0,
+      footLeft: motion ? -stride * 0.075 : 0,
+      footRight: motion ? stride * 0.075 : 0,
       // Recoil pushes the torso back along the aim line and lifts the shoulders slightly.
       lean: motion ? inertia * 0.045 - cos * recoil * 0.034 + (dash ? clamp(p.dashDirX, -1, 1) * 0.13 + dashLean : 0)
         + kick * (kx * 0.12 + ky * 0.04) : 0,
@@ -617,42 +646,56 @@ window.Character = (function () {
     if (w.twoHanded) joint(ctx, 'support-glove', source, 17 - q.recoil, 1.5, -0.12);
     joint(ctx, 'glove', source, w.twoHanded ? 8 - q.recoil : 12 - q.recoil, 1, q.wrist);
     // A short shadow under the weapon seats it in the hand.
-    ctx.save(); ctx.globalAlpha *= 0.18;
-    line(ctx, '#0a141b', w.twoHanded ? 1.6 : 1.1,
-      w.twoHanded ? `M6 3.2 L18 3.4` : `M11 3.4 L22 3.6`);
+    ctx.save(); ctx.globalAlpha *= 0.22;
+    line(ctx, '#050d13', w.twoHanded ? 1.8 : 1.3,
+      w.twoHanded ? `M6 3.4 L18 3.6` : `M11 3.6 L22 3.8`);
     ctx.restore();
     ctx.restore();
   }
   function figure(ctx, q, source) {
     bodySpace(ctx, q, () => {
-      joint(ctx, 'cape', source, 0, q.crouch * 1.4, q.cloak);
-      // Thighs and shin boots move as hinged pairs, underneath split coat skirts.
-      for (const [x, step] of [[-4.1, q.stepLeft], [4.1, q.stepRight]]) {
+      joint(ctx, 'cape', source, q.hipSway, q.crouch * 1.4, q.cloak);
+      // Coat skirt first, then the legs in front of it: a split coat with the thighs
+      // reading through the opening, which is what gives the figure a lower body at 1x.
+      joint(ctx, 'hem-left', source, q.hipSway * 0.6, 0, q.cloak * 0.65 + q.stepLeft * 0.018);
+      joint(ctx, 'hem-right', source, q.hipSway * 0.6, 0, -q.cloak * 0.35 + q.stepRight * 0.018);
+      // Thighs and shin boots move as hinged pairs.
+      // Each leg gets hip swing, knee bend and an ankle roll, so the stride has a joint
+      // rather than a sliding tube.
+      for (const [x, step, knee, roll] of [[-5, q.stepLeft, q.kneeLeft, q.footLeft],
+        [5, q.stepRight, q.kneeRight, q.footRight]]) {
         const crouchY = q.crouch * 1.8;
-        joint(ctx, 'leg', source, x, 7 + step * 0.5 + crouchY, step * 0.055 - q.crouch * 0.12);
-        joint(ctx, 'knee-guard', source, x, 11 + step * 0.5 + crouchY, step * 0.055 - q.crouch * 0.12, x < 0);
-        joint(ctx, 'boot', source, x, 14 + step + crouchY, -step * 0.06 - q.crouch * 0.18, x < 0);
-        joint(ctx, 'heel', source, x, 20 + step + crouchY, -step * 0.06 - q.crouch * 0.18, x < 0);
+        const lift = knee * 0.9;
+        const hx = x + q.hipSway;
+        joint(ctx, 'leg', source, hx, 7 + step * 0.45 + crouchY - lift * 0.35, step * 0.075 - q.crouch * 0.12);
+        joint(ctx, 'knee-guard', source, hx, 11 + step * 0.45 + crouchY - lift * 0.35, step * 0.075 - q.crouch * 0.12, x < 0);
+        joint(ctx, 'boot', source, hx + roll * 3.2, 14 + step + crouchY - lift, roll - q.crouch * 0.18, x < 0);
+        joint(ctx, 'heel', source, hx + roll * 3.2, 20 + step + crouchY - lift, roll - q.crouch * 0.18, x < 0);
       }
-      joint(ctx, 'hem-left', source, 0, 0, q.cloak * 0.65 + q.stepLeft * 0.018);
-      joint(ctx, 'hem-right', source, 0, 0, -q.cloak * 0.35 + q.stepRight * 0.018);
     });
     if (q.rearGun) gun(ctx, q, source);
     bodySpace(ctx, q, () => {
-      joint(ctx, 'torso-' + q.frame, source, 0, q.breath, q.stance * 0.3);
-      joint(ctx, 'coat-pin', source, 0, q.breath - 2, q.stance * 0.3);
-      joint(ctx, 'idle-arm', source, -9, -4 + q.breath, q.lantern * 0.65);
+      // Shoulders counter-rotate against the hips, which is what makes a walk read as a walk.
+      joint(ctx, 'torso-' + q.frame, source, q.twist, q.breath, q.stance * 0.3);
+      joint(ctx, 'coat-pin', source, q.twist, q.breath - 2, q.stance * 0.3);
+      joint(ctx, 'idle-arm', source, -9 + q.twist * 0.4, -4 + q.breath, q.lantern * 0.65 + q.armSwing);
       joint(ctx, 'lantern', source, -10, 10 + q.breath, q.lantern);
       // Asymmetric cape lies on the left shoulder, not as a round blanket over the chest.
-      joint(ctx, 'cape', source, 0, 0, q.cloak * 0.75);
-      joint(ctx, 'scarf-tail', source, 3, -9 + q.breath, q.scarf);
+      joint(ctx, 'cape', source, q.twist * 0.3, 0, q.cloak * 0.75);
+      joint(ctx, 'scarf-tail', source, 3 + q.twist * 0.3, -9 + q.breath, q.scarf);
       part(ctx, 'scarf', source);
     });
     if (!q.rearGun) gun(ctx, q, source);
     // Face always reads clearly above a passing arm. Hat brim remains above the eyes.
     bodySpace(ctx, q, () => {
-      joint(ctx, 'head-' + q.frame, source, 0, q.breath, q.stance * 0.15);
-      joint(ctx, 'hat-feather', source, 5, -25 + q.breath, q.stance * 0.2 + q.cloak * 0.15);
+      // Head drawn at 0.88 and anchored at the neck: the skull and hat shrink toward
+      // adult proportion while the collar and shoulders stay exactly where they were.
+      ctx.save();
+      ctx.translate(-q.twist * 0.45, q.breath); ctx.rotate(q.stance * 0.15);
+      ctx.translate(0, -10); ctx.scale(HEAD_SCALE, HEAD_SCALE); ctx.translate(0, 10);
+      part(ctx, 'head-' + q.frame, source);
+      ctx.restore();
+      joint(ctx, 'hat-feather', source, 4.4 - q.twist * 0.45, -20.6 + q.breath, q.stance * 0.2 + q.cloak * 0.15);
     });
   }
   function requireInit() { if (!assets) throw new Error('Character.init() must be called before drawing'); }
@@ -668,8 +711,8 @@ window.Character = (function () {
       // without brightening his coat or blowing out the lantern.
       if (options.rim && !options.low) {
         const prev = ctx.globalCompositeOperation, alpha = ctx.globalAlpha;
-        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = alpha * 0.26;
-        ctx.save(); ctx.translate(-0.7, -0.9); figure(ctx, q, assets.mask); ctx.restore();
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = alpha * 0.24;
+        ctx.save(); ctx.translate(-1.1, -1.25); figure(ctx, q, assets.mask); ctx.restore();
         ctx.globalCompositeOperation = prev; ctx.globalAlpha = alpha;
       }
       if (options.highContrast) {
