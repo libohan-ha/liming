@@ -97,6 +97,67 @@ window.Character = (function () {
     c.fillStyle = BRASS_HI; c.fillRect(-0.4, 1.2, 0.8, 0.6);
   }
 
+  function beltTools(c) {
+    // Hip carry: a skinning knife, a coiled rope hook and a rolled map — the kit of a
+    // working watchman, not an ornament. One dark silhouette mass with lit edges.
+    paint(c, grad(c, -5, -2, 5, 8, ['#3a2b20', '#241a12', '#0f0b08']),
+      'M-4.5 -1.5 C-2 -2.6 2 -2.6 4.5 -1.5 L4.2 1.5 C1.5 2.5 -1.5 2.5 -4.2 1.5 Z', INK, 0.5);
+    // Knife: antler handle, single bright edge, brass guard.
+    paint(c, '#8a6b4a', 'M-3.6 1.4 L-2.4 1.2 L-2.8 4.6 L-4 4.8 Z', INK, 0.4);
+    line(c, '#c9a878', 0.32, 'M-3.2 1.6 L-3.5 4.2');
+    paint(c, grad(c, -3, 4, -2, 8, ['#b9cdd2', '#5e7680', '#22333c']),
+      'M-2.9 4.4 L-1.9 4.3 L-2.4 7.8 L-3.3 7.6 Z', INK, 0.35);
+    line(c, '#e8f4f6', 0.3, 'M-2.7 4.6 L-2.3 7.4');
+    line(c, BRASS, 0.4, 'M-3.1 4.4 L-1.8 4.3');
+    // Rope hook: two coils and a brass beak.
+    line(c, '#9a7d52', 0.7, 'M0.4 1.8 C1.8 1.6 2.2 3 1 3.4 C-0.2 3.8 -0.6 2.4 0.6 2.2');
+    line(c, '#6d5436', 0.45, 'M0.8 2.4 C1.6 2.3 1.8 3 1 3.1');
+    paint(c, BRASS, 'M1.2 3.6 L2.6 4.4 L2.2 5.2 L0.9 4.3 Z', INK, 0.35);
+    line(c, BRASS_HI, 0.3, 'M1.5 3.9 L2.3 4.5');
+    // Rolled map: parchment tube with a leather tie.
+    paint(c, grad(c, 2.6, 1, 4.6, 6, ['#e8d5a8', '#b09468', '#6e5638']),
+      'M2.6 1.6 L4.4 1.2 L4.8 5.6 L3 6 Z', INK, 0.4);
+    line(c, '#f4e6c0', 0.35, 'M3.1 2 L4.2 1.8 M3.3 3.4 L4.4 3.2');
+    line(c, '#4b3628', 0.5, 'M2.9 3.6 L4.6 3.3');
+  }
+
+  function cuffShirt(c) {
+    // Rolled sleeve cuff: a band of natural linen plus a leather wrist wrap, so the
+    // wrist has a layer between coat and glove instead of ending in mid-air.
+    paint(c, grad(c, 0, -2, 6, 4, ['#e5d9bd', '#b8a888', '#6f6350']),
+      'M0 -1.5 C2 -2.2 4.5 -2 6 -1 L5.6 1.8 C3.8 2.8 1.5 2.6 0 1.6 Z', INK, 0.5);
+    line(c, '#f7eed6', 0.5, 'M0.6 -1 C2.4 -1.6 4.2 -1.5 5.4 -0.8');
+    line(c, '#8a7c62', 0.35, 'M1 -0.4 L0.8 1.2 M2.6 -0.8 L2.5 1.4 M4.2 -0.7 L4.2 1.2');
+    paint(c, LEATHER, 'M0.2 1.4 C2 2.4 4.2 2.4 5.8 1.6 L5.5 3.4 C3.8 4.2 1.6 4 -0.2 3 Z', INK, 0.45);
+    line(c, LEATHER_HI, 0.4, 'M0.6 2 C2.2 2.8 4 2.8 5.4 2.2');
+    line(c, BRASS, 0.45, 'M2.4 2.6 L3.4 2.7');
+  }
+
+  function bandolier(c) {
+    // Cartridge sash across the chest: brass shells seated in leather loops. Reads at 1x
+    // as a dotted diagonal — the classic hunter mark on the front and quarter views.
+    paint(c, grad(c, -6, -9, 6, 7, ['#4a3323', '#2c1e13', '#120c07']),
+      'M-5.5 -8.5 L-3.8 -9.4 L6.6 6.2 L4.8 7.2 Z', INK, 0.5);
+    line(c, '#7d5c39', 0.4, 'M-4.6 -8.2 L5.6 6.4');
+    for (let i = 0; i < 5; i++) {
+      const t = i / 4, sx = -3.4 + t * 9.4, sy = -7.2 + t * 14.2;
+      paint(c, i % 2 ? BRASS : '#a8824a', `M${sx} ${sy} L${sx + 1.1} ${sy + 0.35} L${sx + 0.75} ${sy + 2.1} L${sx - 0.35} ${sy + 1.75} Z`, INK, 0.32);
+      line(c, BRASS_HI, 0.28, `M${sx + 0.15} ${sy + 0.35} L${sx + 0.55} ${sy + 1.6}`);
+    }
+    buckle(c, 4.4, 4.4, 2, 1.7);
+  }
+
+  function holster(c) {
+    // Leather hip holster with a retention strap; the pistol's home when not drawn.
+    paint(c, grad(c, -3, -2, 4, 9, ['#54402c', '#332417', '#150e08']),
+      'M-2.4 -1.5 C-0.5 -2.4 2 -2.2 3.4 -1 L4 5.5 C2.8 7.5 0.5 8.4 -1.6 7.8 L-2.6 3 Z', INK, 0.6);
+    paint(c, '#6b5238', 'M-1.8 -0.8 C-0.3 -1.5 1.6 -1.4 2.8 -0.5 L2.6 0.8 C1.2 0 -0.6 -0.1 -1.9 0.6 Z', null);
+    line(c, '#8a6b47', 0.4, 'M-1.6 1.4 C0 0.7 2 0.7 3 1.4 M-1.4 3.4 C0 2.8 1.8 2.8 2.8 3.4');
+    line(c, '#241a10', 0.55, 'M-2.2 2.4 L3.4 1.6');
+    line(c, BRASS, 0.5, 'M0.2 2 L1.4 1.9');
+    line(c, '#0d0906', 0.4, 'M-1.8 5.6 C-0.5 6.4 1 6.4 2.2 5.8');
+  }
+
   function kneeGuard(c) {
     // A separate curved knee plate makes the stride read as a joint, not a tube.
     paint(c, grad(c, -3, 0, 3, 4, ['#9db6bf', '#4f6a77', '#1f333f']),
@@ -597,11 +658,16 @@ window.Character = (function () {
     add('forearm', 3, -3, 14, 12, c => sleeve(c, true));
     add('glove', -3, -3, 10, 11, c => glove(c, false));
     add('support-glove', -5, -3, 11, 10, c => glove(c, true));
+    add('support-cuff', -5, -4, 9, 9, cuffShirt);
     add('idle-arm', -7, -3, 12, 20, idleArm);
     add('hat-feather', -2, -14, 10, 16, hatFeather);
     add('coat-pin', -4, -4, 8, 11, coatPin);
     add('vial', -4, -4, 8, 12, vial);
     add('gear-pouch', -5, -3, 10, 10, gearPouch);
+    add('belt-tools', -7, -3, 14, 12, beltTools);
+    add('cuff-shirt', -3, -4, 9, 9, cuffShirt);
+    add('bandolier', -8, -11, 18, 20, bandolier);
+    add('holster', -5, -3, 11, 11, holster);
     add('knee-guard', -4, -2, 8, 7, kneeGuard);
     add('heel', -4, -2, 10, 8, heel);
     for (const key of ['pistol', 'shotgun', 'repeater']) for (const variant of ['base', 'evolved'])
@@ -666,6 +732,11 @@ window.Character = (function () {
     const crouch = motion && dash ? 1.25 : 0;
     const brace = motion ? clamp(recoil, 0, 2.5) * 0.16 + Math.abs(stance) * 0.35 : 0;
     const dashLean = dash ? -0.26 : 0;
+    // Cloth parts never move with the skeleton; they hang in the air a beat behind it.
+    // Idle breathing rocks them gently, speed drags them back along -vx, a dash streams
+    // them hard. This is what makes the coat read as cloth instead of cardboard.
+    const drag = motion ? clamp(vx / 320, -1, 1) : 0;
+    const idleSway = motion && !moving && !dash ? Math.sin(t * (lowHp ? 3.8 : 2.1) - 0.9) * (lowHp ? 0.075 : 0.05) : 0;
     // Walk cycle detail: the hips lead, the shoulders counter, the knee of the forward
     // leg bends and the boot rolls from heel to toe. Four small numbers, four readable cues.
     const swing = motion && moving && !dash ? Math.sin(phase) : 0;
@@ -696,9 +767,12 @@ window.Character = (function () {
         + (Number.isFinite(p.hp) && Number.isFinite(p.maxHp) && p.maxHp > 0
           ? clamp(1 - p.hp / p.maxHp, 0, 1) * 1.9 : 0) : 0,
       shove: motion ? kick * kx * 1.5 : 0,
-      cloak: motion ? -inertia * 0.09 + Math.sin(t * 3.1 + phase * 0.3) * 0.018 + (dash ? -0.32 : 0) - kick * kx * 0.1 : 0,
-      scarf: motion ? Math.sin(t * 3.7 + 0.7) * 0.035 - inertia * 0.08 + (dash ? -0.26 : 0) : 0,
-      lantern: motion ? Math.sin(t * 2.4 + phase * 0.35) * 0.025 - inertia * 0.055 - kick * kx * 0.16 + (dash ? -0.22 : 0) : 0,
+      cloak: motion ? -inertia * 0.09 + Math.sin(t * 3.1 + phase * 0.3) * 0.018 + (dash ? -0.32 : 0) - kick * kx * 0.1 + idleSway - drag * 0.045 : 0,
+      scarf: motion ? Math.sin(t * 3.7 + 0.7) * 0.035 - inertia * 0.08 + (dash ? -0.16 : 0) + idleSway * 1.1 - drag * 0.04 : 0,
+      lantern: motion ? Math.sin(t * 2.4 + phase * 0.35) * 0.025 - inertia * 0.055 - kick * kx * 0.16 + (dash ? -0.22 : 0) + idleSway * 0.7 - drag * 0.03 : 0,
+      // Hat feather is the lightest part: it trembles in idle air and streams in a run.
+      // Kept shallow — a strong negative angle would flip it up through the hat crown.
+      feather: motion ? idleSway * 0.9 - drag * 0.05 + (dash ? -0.12 : 0) : 0,
       wrist: motion && recoil ? -recoil * 0.055 : 0, recoil,
       dash: motion && dash,
       muzzle: motion ? clamp(p.muzzle / 0.12, 0, 1) : 0,
@@ -749,9 +823,15 @@ window.Character = (function () {
     joint(ctx, 'upper-arm', source, 1, q.brace * 0.35, q.wrist + q.stance * 0.35);
     joint(ctx, 'forearm', source, -q.recoil, q.brace, q.wrist * 0.25 + q.stance * 0.25);
     joint(ctx, w.part, source, -q.recoil, 0);
+    // A linen cuff breaks each wrist: coat sleeve → shirt band → leather wrap → glove,
+    // so the hand has a layered joint instead of ending in mid-air on the steel.
+    joint(ctx, 'cuff-shirt', source, (w.twoHanded ? 6 : 10) - q.recoil, 1, q.wrist);
     // The support hand grips the barrel BEFORE the trigger hand is drawn, so the near hand
     // overlaps the far one instead of the two reading as one wide blob.
-    if (w.twoHanded) joint(ctx, 'support-glove', source, 17 - q.recoil, 1.5, -0.12);
+    if (w.twoHanded) {
+      joint(ctx, 'support-cuff', source, 15.5 - q.recoil, 1.2, -0.12);
+      joint(ctx, 'support-glove', source, 17 - q.recoil, 1.5, -0.12);
+    }
     joint(ctx, 'glove', source, w.twoHanded ? 8 - q.recoil : 12 - q.recoil, 1, q.wrist);
     // A short shadow under the weapon seats it in the hand.
     ctx.save(); ctx.globalAlpha *= 0.22;
@@ -774,18 +854,27 @@ window.Character = (function () {
         [5, q.stepRight, q.kneeRight, q.footRight]]) {
         const crouchY = q.crouch * 1.8;
         const lift = knee * 0.9;
-        const hx = x + q.hipSway;
-        joint(ctx, 'leg', source, hx, 7 + step * 0.45 + crouchY - lift * 0.35, step * 0.075 - q.crouch * 0.12);
-        joint(ctx, 'knee-guard', source, hx, 11 + step * 0.45 + crouchY - lift * 0.35, step * 0.075 - q.crouch * 0.12, x < 0);
-        joint(ctx, 'boot', source, hx + roll * 3.2, 14 + step + crouchY - lift, roll - q.crouch * 0.18, x < 0);
-        joint(ctx, 'heel', source, hx + roll * 3.2, 20 + step + crouchY - lift, roll - q.crouch * 0.18, x < 0);
+        // Recoil plants the body: the hips sit back and the boots press into the ground,
+        // so a shot reads as force travelling down to the feet, not just a wobbling arm.
+        const hx = x + q.hipSway - q.recoil * 0.22;
+        joint(ctx, 'leg', source, hx, 7 + step * 0.45 + crouchY - lift * 0.35 + q.recoil * 0.14, step * 0.075 - q.crouch * 0.12);
+        joint(ctx, 'knee-guard', source, hx, 11 + step * 0.45 + crouchY - lift * 0.35 + q.recoil * 0.14, step * 0.075 - q.crouch * 0.12, x < 0);
+        joint(ctx, 'boot', source, hx + roll * 3.2 - q.recoil * 0.3, 14 + step + crouchY - lift + q.recoil * 0.1, roll - q.crouch * 0.18, x < 0);
+        joint(ctx, 'heel', source, hx + roll * 3.2 - q.recoil * 0.42, 20 + step + crouchY - lift + q.recoil * 0.08, roll - q.crouch * 0.18, x < 0);
       }
     });
     if (q.rearGun) gun(ctx, q, source);
     bodySpace(ctx, q, () => {
       // Shoulders counter-rotate against the hips, which is what makes a walk read as a walk.
       joint(ctx, 'torso-' + q.frame, source, q.twist, q.breath, q.stance * 0.3);
+      // Cartridge sash lies over the coat on the three forward-facing views; from the
+      // back it would paint across the yoke, so it stays home there.
+      if (q.frame !== 'back' && q.frame !== 'rearquarter')
+        joint(ctx, 'bandolier', source, q.twist, q.breath, q.stance * 0.3);
       joint(ctx, 'coat-pin', source, q.twist, q.breath - 2, q.stance * 0.3);
+      // Belt kit rides the hips and lags the torso a touch, so it swings like mass.
+      joint(ctx, 'belt-tools', source, -7.6 + q.hipSway * 0.5, 4.5 + q.breath + q.crouch * 0.8, q.cloak * 0.3 - q.twist * 0.06);
+      joint(ctx, 'holster', source, 8 + q.hipSway * 0.5, 3.5 + q.breath + q.crouch * 0.8, q.cloak * 0.22 + q.twist * 0.05);
       joint(ctx, 'vial', source, 4.8 + q.twist * 0.4, 5.5 + q.breath, q.stance * 0.2 + q.cloak * 0.2);
       joint(ctx, 'gear-pouch', source, -5.2 + q.twist * 0.4, 5 + q.breath, -q.stance * 0.15 + q.cloak * 0.15);
       joint(ctx, 'idle-arm', source, -9 + q.twist * 0.4, -4 + q.breath, q.lantern * 0.65 + q.armSwing);
@@ -805,7 +894,7 @@ window.Character = (function () {
       ctx.translate(0, -10); ctx.scale(HEAD_SCALE, HEAD_SCALE); ctx.translate(0, 10);
       part(ctx, 'head-' + q.frame, source);
       ctx.restore();
-      joint(ctx, 'hat-feather', source, 4.4 - q.twist * 0.45, -20.6 + q.breath, q.stance * 0.2 + q.cloak * 0.15);
+      joint(ctx, 'hat-feather', source, 4.4 - q.twist * 0.45, -20.6 + q.breath, q.stance * 0.2 + q.cloak * 0.15 + q.feather);
     });
   }
   function requireInit() { if (!assets) throw new Error('Character.init() must be called before drawing'); }

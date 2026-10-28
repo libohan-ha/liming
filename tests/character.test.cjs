@@ -133,7 +133,8 @@ test('pose chooses eight directions, remains pure, and articulates alternating b
 
 test('new ranger silhouette parts and stance animation remain visible at normal scale', () => {
   const { character: c } = load(); const a = c.init();
-  for (const name of ['hat-feather', 'coat-pin', 'vial', 'gear-pouch', 'knee-guard', 'heel']) {
+  for (const name of ['hat-feather', 'coat-pin', 'vial', 'gear-pouch', 'knee-guard', 'heel',
+    'belt-tools', 'cuff-shirt', 'support-cuff', 'bandolier', 'holster']) {
     assert.ok(a.parts[name], name + ' is a distinct cached silhouette part');
   }
   const idleA = c.pose(player({ vx: 0, vy: 0 }), 0);
@@ -149,10 +150,32 @@ test('new ranger silhouette parts and stance animation remain visible at normal 
   assert.ok(Math.abs(moving.brace) > 0, 'weapon brace follows the moving stance');
   const r = recorder(); c.draw(r.ctx, player({ vx: 180, vy: 40 }), 1.2);
   const draws = sprites(r);
-  for (const name of ['hat-feather', 'coat-pin', 'vial', 'gear-pouch', 'knee-guard', 'heel']) {
+  for (const name of ['hat-feather', 'coat-pin', 'vial', 'gear-pouch', 'knee-guard', 'heel',
+    'belt-tools', 'cuff-shirt', 'bandolier', 'holster']) {
     const part = a.parts[name];
     assert.ok(draws.some(d => d.args[0] === a.canvas && d.args[1] === part.x * 3 && d.args[2] === part.y * 3), name + ' is composited in the figure');
   }
+});
+
+test('2026-10-29 kit details: shirt cuffs layer both wrists and the sash hides on rear views', () => {
+  const { character: c } = load(); const a = c.init();
+  const has = (r, name) => sprites(r).some(d => d.args[0] === a.canvas &&
+    d.args[1] === a.parts[name].x * 3 && d.args[2] === a.parts[name].y * 3);
+  // Two-handed weapons show a shirt cuff under the support glove too.
+  const sg = recorder(); c.draw(sg.ctx, player({ weapon: 'shotgun', vx: 0, vy: 0, aim: 0 }), 1);
+  assert.ok(has(sg, 'support-cuff'), 'support wrist has a linen cuff layer');
+  assert.ok(has(sg, 'bandolier'), 'front-facing aim shows the cartridge sash');
+  // Aiming straight up picks the back view: the sash must not paint over the rear yoke.
+  const up = recorder(); c.draw(up.ctx, player({ weapon: 'shotgun', vx: 0, vy: 0, aim: -Math.PI / 2 }), 1);
+  assert.ok(!has(up, 'bandolier'), 'rear views keep the sash off the back');
+  // Cloth drag: standing still the feather idles, dashing it streams back harder.
+  const still = c.pose(player({ vx: 0, vy: 0, dashT: 0 }), 1.0);
+  const run = c.pose(player({ vx: 300, vy: 0, dashT: 0 }), 1.0);
+  const dash = c.pose(player({ vx: 0, vy: 0, dashT: 0.16, dashDirX: 1 }), 1.0);
+  assert.ok(Math.abs(still.feather) > 0, 'idle air moves the feather');
+  assert.ok(run.feather < 0, 'forward speed drags cloth backwards');
+  assert.ok(dash.feather < run.feather, 'dash streams the feather hardest');
+  assert.ok(Math.abs(still.cloak) > 0 || Math.abs(still.scarf) > 0, 'idle cloth keeps a soft sway');
 });
 
 test('reduceMotion makes all time-dependent pose and rendering static while keeping exact aim', () => {
