@@ -74,6 +74,29 @@ window.Character = (function () {
     line(c, '#fff2bd', 0.3, 'M0 -0.6 L0 2.6 M-1.3 1 L1.3 1');
   }
 
+  function vial(c) {
+    // Sanctified blue ether vial on hip: glass tube with cork stopper and luminous contents.
+    paint(c, '#5c412b', 'M-1.4 -3.6 L1.4 -3.6 L1 -2 L-1 -2 Z', INK, 0.4);
+    paint(c, '#2c2218', 'M-2 -2 L2 -2 L2.4 -0.8 L-2.4 -0.8 Z', INK, 0.45);
+    line(c, BRASS, 0.5, 'M-1.8 -1.4 L1.8 -1.4');
+    paint(c, 'rgba(20,40,55,.65)', 'M-2.2 -0.8 L2.2 -0.8 C2.6 2 2.6 5 1.8 6.5 C1 7.4 -1 7.4 -1.8 6.5 C-2.6 5 -2.6 2 -2.2 -0.8 Z', INK, 0.5);
+    paint(c, grad(c, 0, 1, 0, 6.5, ['#7be2f8', '#2fa8d0', '#155b76']),
+      'M-1.8 1.5 C-0.5 1 0.5 1 1.8 1.5 C2.2 3.5 2.2 5 1.5 6 C0.8 6.6 -0.8 6.6 -1.5 6 C-2.2 5 -2.2 3.5 -1.8 1.5 Z', null);
+    line(c, '#e0f9ff', 0.4, 'M-1.5 1.6 C0 1.2 1.5 1.6 1.5 1.6');
+    line(c, 'rgba(255,255,255,.65)', 0.4, 'M-1.8 0.2 C-2.2 2 -2.1 4.5 -1.4 5.8');
+  }
+
+  function gearPouch(c) {
+    // Heavy oiled leather cartridge box with brass snap clasp on the hunter's belt.
+    paint(c, grad(c, -3.5, -2, 3.5, 4.5, ['#4f3929', '#2f2117', '#140d09']),
+      'M-3.2 -2 L3.2 -2 C3.8 -2 4.2 -1.4 4.2 -0.6 L4 4 C4 4.8 3.4 5.2 2.6 5.2 L-2.6 5.2 C-3.4 5.2 -4 4.8 -4 4 L-4.2 -0.6 C-4.2 -1.4 -3.8 -2 -3.2 -2 Z', INK, 0.6);
+    paint(c, grad(c, -3.5, -2, 3.5, 2, ['#5d4432', '#3a2b1f']),
+      'M-3.6 -2 L3.6 -2 L3.4 1.5 C2 2.4 -2 2.4 -3.4 1.5 Z', INK, 0.5);
+    line(c, '#99734e', 0.35, 'M-3.2 -1.6 L3.2 -1.6 M-3 1.2 C-1.5 2 1.5 2 3 1.2');
+    c.fillStyle = BRASS; c.fillRect(-0.7, 1, 1.4, 1.2);
+    c.fillStyle = BRASS_HI; c.fillRect(-0.4, 1.2, 0.8, 0.6);
+  }
+
   function kneeGuard(c) {
     // A separate curved knee plate makes the stride read as a joint, not a tube.
     paint(c, grad(c, -3, 0, 3, 4, ['#9db6bf', '#4f6a77', '#1f333f']),
@@ -246,24 +269,86 @@ window.Character = (function () {
       line(c, RIM, 0.5, 'M-5 -23 C-8 -20 -7 -16 -5 -14');
     }
     // A low cocked tricorn: crown -28, brim -23.5; face -23..-12 stays exposed.
-    // Painted as three folded planes plus a banded brim, so it holds up in silhouette.
-    paint(c, grad(c, -6, -28, 5, -23, ['#566872', '#27333e', '#101b24']),
-      'M-6 -24 C-6 -26 -4 -27.4 -2 -27.4 L0 -28 L4 -27 C5 -25.4 6 -24.4 7 -23.6 L-6 -23.6 Z', INK, 0.85);
-    paint(c, '#28353f', 'M-6 -25 L-3 -26.2 L-1 -27 L0 -25.2 L5 -24.4 L4 -23.6 L-6 -23.6 Z', null);
-    paint(c, '#141e27', 'M0 -25.2 L5 -24.4 L4 -23.6 L0 -23.6 Z', null);
-    line(c, '#74838c', 0.45, 'M-4 -26.4 L-2 -26.8 M1 -27 L3 -26.5');
-    line(c, '#e6f3f6', 0.5, 'M-6 -26 C-4 -27.4 -2 -27.8 0 -28');
-    // Hat band and cockade sit above the brim and read at 1x.
-    paint(c, '#1c2933', 'M-5.6 -24.9 L5.6 -24.9 L5.4 -23.9 L-5.4 -23.9 Z', null);
-    line(c, '#9c8557', 0.5, 'M-5.2 -24.4 L5 -24.4');
-    // Brim: front plane, underside shadow separated by a bright wet edge.
-    paint(c, grad(c, -9, -24.4, 8, -22, ['#22303a', '#121c24', '#0b131a']),
-      'M-9 -24.4 C-5 -22.4 -4 -24.4 -1 -24.4 C2 -24.4 4 -22.3 8 -24.4 L9 -23.4 C6 -22.1 2 -22.4 0 -22.8 C-4 -22.6 -7 -22.2 -10 -23.4 Z', INK, 0.75);
-    paint(c, '#303f47', 'M-8.6 -24 C-5 -22.8 -3 -23.6 -1 -23.8 L0 -23 C-3 -22.8 -6 -22.4 -9 -23.6 Z', null);
-    line(c, '#8ea1a8', 0.65, 'M-9 -24.2 C-6 -22.9 -4 -23.7 -2 -23.8 M3 -23.5 L7.5 -24.1');
-    line(c, RIM, 0.55, 'M-9.4 -24.5 C-6 -23.2 -4 -24 -2 -24.1');
-    line(c, '#a8916a', 0.7, 'M-4 -24.6 C0 -25.2 2 -24.9 4 -24.4');
-    buckle(c, 2.8, -25.6, 1.6, 1.3);
+    // Painted with view-specific 3D perspective geometry so the 8-directional profile reads crisp.
+    const back = view === 'back', rearQ = view === 'rearquarter';
+    if (back) {
+      // Direct back: high arched crown, swept-up rear brim wings left & right, central nape cleft.
+      paint(c, grad(c, -6, -28.5, 6, -23, ['#4c5c66', '#222d36', '#0d161d']),
+        'M-5 -24 C-5 -26.5 -3 -28.2 0 -28.2 C3 -28.2 5 -26.5 5 -24 L-5 -24 Z', INK, 0.85);
+      paint(c, '#1a242c', 'M-4 -25.5 C-2 -27 2 -27 4 -25.5 L4.5 -24 L-4.5 -24 Z', null);
+      line(c, '#687780', 0.45, 'M-3 -27 C0 -27.8 3 -27 4 -26');
+      line(c, RIM, 0.55, 'M-5 -26 C-2 -28 2 -28 5 -26');
+      paint(c, grad(c, -8, -24.5, 8, -22, ['#1c262e', '#10171d', '#080d12']),
+        'M-8.5 -24.8 C-5 -22.8 -1 -23.2 0 -23.6 C1 -23.2 5 -22.8 8.5 -24.8 L9 -23.6 C6 -22.2 2 -22.6 0 -22.8 C-2 -22.6 -6 -22.2 -9 -23.6 Z', INK, 0.75);
+      paint(c, '#2b3840', 'M-8 -24.2 C-5 -22.8 0 -23.2 3 -23.6 L0 -23 C-3 -22.8 -6 -22.4 -8 -23.6 Z', null);
+      line(c, '#7e9096', 0.55, 'M-8.2 -24.4 C-4 -23 4 -23 8.2 -24.4');
+      paint(c, '#141d24', 'M-1.5 -24.5 L1.5 -24.5 L2 -23.5 L-2 -23.5 Z', null);
+      line(c, '#b39762', 0.5, 'M-1.2 -24 L1.2 -24');
+      line(c, '#33271c', 0.6, 'M-0.8 -23.5 L-1.4 -19 M0.8 -23.5 L1.4 -19');
+      line(c, '#9e8555', 0.35, 'M-0.7 -23.2 L-1.2 -19.4 M0.7 -23.2 L1.2 -19.4');
+    } else if (rearQ) {
+      // 3/4 Back: angled crown, far wing tapering, near wing broad and upturned
+      paint(c, grad(c, -6, -28, 5, -23, ['#50606a', '#24303a', '#0e1820']),
+        'M-6 -24 C-6 -26.2 -3.5 -27.8 -0.5 -28 L3.5 -27.2 C4.8 -25.6 5.8 -24.6 6.5 -23.8 L-6 -23.8 Z', INK, 0.85);
+      paint(c, '#202a32', 'M-5 -25 L-2 -26.5 2 -25.8 L5 -24.2 L-5 -24.2 Z', null);
+      line(c, '#6f7e88', 0.45, 'M-3.5 -26.8 L0 -27.2 M2 -26.8 L4 -26');
+      line(c, RIM, 0.55, 'M-5.8 -26 C-3.5 -27.6 -1 -28 1 -28');
+      paint(c, grad(c, -8.5, -24.4, 7.5, -22, ['#1f2a32', '#111920', '#090f15']),
+        'M-8.8 -24.6 C-5 -22.6 -2 -24.2 0 -24.4 C3 -24.4 5.5 -22.8 8 -24.5 L8.6 -23.5 C5.8 -22.3 2 -22.6 0 -22.8 C-4 -22.6 -6.8 -22.2 -9.2 -23.6 Z', INK, 0.75);
+      line(c, '#85979f', 0.6, 'M-8.4 -24.3 C-5 -23.2 -2 -23.9 0 -24 M2 -23.7 L7.4 -24.2');
+      line(c, RIM, 0.55, 'M-9 -24.6 C-5 -23.2 -2 -24 0 -24.2');
+      line(c, '#8f764a', 0.5, 'M-3 -24.6 L3 -24.5');
+      buckle(c, 2.2, -25.6, 1.5, 1.3);
+      line(c, '#2d2217', 0.55, 'M0.6 -23.5 L0.2 -19.5');
+    } else if (profile) {
+      // Side profile: sleek forward visor, high swept-up side cockade wing, low nape
+      paint(c, grad(c, -6, -28.2, 5, -23, ['#5a6c76', '#283540', '#101c25']),
+        'M-5.5 -23.8 C-5.5 -26 -3 -28 0.5 -28.2 L3 -27.5 C4.5 -25.8 5.8 -24.6 7.2 -23.6 L-5.5 -23.6 Z', INK, 0.85);
+      paint(c, '#2a3742', 'M-4.5 -24.8 L-1.5 -26.5 L1 -26 L5 -24.2 L-4.5 -24.2 Z', null);
+      line(c, '#788892', 0.45, 'M-3 -26.6 L-0.5 -27.2 M1.5 -27 L4 -26.2');
+      line(c, RIM, 0.6, 'M-5.5 -25.8 C-3 -27.6 0 -28.2 2 -28');
+      paint(c, '#1b262f', 'M-5 -24.8 L6.2 -24.8 L6 -23.8 L-5 -23.8 Z', null);
+      line(c, '#a48e5d', 0.5, 'M-4.6 -24.3 L5.6 -24.3');
+      paint(c, grad(c, -8, -24.4, 7.5, -22, ['#24323c', '#131e26', '#0a1219']),
+        'M-8.2 -24.4 C-4.5 -22.4 -1 -24.4 2 -24.4 C4 -24.4 6 -22.5 8 -24.2 L8.6 -23.3 C6 -22.1 3 -22.4 1 -22.7 C-3 -22.5 -5.8 -22.2 -8.8 -23.4 Z', INK, 0.75);
+      paint(c, '#33434c', 'M-7.8 -24 C-4 -22.8 -1 -23.6 1 -23.8 L2 -23 C-1 -22.8 -4 -22.4 -8 -23.6 Z', null);
+      line(c, '#93a6ad', 0.65, 'M-8 -24.2 C-4 -22.9 -1 -23.7 1 -23.8 M3.5 -23.5 L7.6 -24');
+      line(c, RIM, 0.55, 'M-8.4 -24.5 C-4 -23.2 -1 -24 1 -24.1');
+      line(c, '#ab9366', 0.7, 'M-2 -24.6 C1 -25.2 3 -24.9 5 -24.4');
+      buckle(c, 3.2, -25.8, 1.8, 1.4);
+    } else if (quarter) {
+      // 3/4 Front: dynamic perspective! Right brim tip sharply cocked forward, left wing swept back
+      paint(c, grad(c, -6, -28, 5, -23, ['#586a74', '#283540', '#101b24']),
+        'M-6 -24 C-6 -26.2 -3.8 -27.6 -1.5 -27.6 L0.5 -28 L4.5 -26.8 C5.6 -25.2 6.5 -24.2 7.5 -23.5 L-6 -23.5 Z', INK, 0.85);
+      paint(c, '#293641', 'M-5.8 -25 L-2.8 -26.4 L-0.8 -27 L0.5 -25.2 L5.5 -24.3 L-5.8 -24.3 Z', null);
+      line(c, '#76858e', 0.45, 'M-3.8 -26.5 L-1.8 -26.9 M1.2 -27.1 L3.5 -26.4');
+      line(c, RIM, 0.55, 'M-6 -26 C-3.8 -27.5 -1.5 -28 0.5 -28');
+      paint(c, '#1d2a34', 'M-5.6 -24.9 L6 -24.9 L5.8 -23.9 L-5.4 -23.9 Z', null);
+      line(c, '#9e885a', 0.5, 'M-5.2 -24.4 L5.4 -24.4');
+      paint(c, grad(c, -9, -24.4, 8, -22, ['#23313b', '#131d25', '#0b131a']),
+        'M-9.2 -24.4 C-5 -22.3 -3.5 -24.4 -0.5 -24.4 C2.5 -24.4 4.5 -22.3 8.2 -24.4 L9.2 -23.4 C6.2 -22.1 2.2 -22.4 0.2 -22.8 C-3.8 -22.6 -6.8 -22.2 -9.8 -23.4 Z', INK, 0.75);
+      paint(c, '#314149', 'M-8.8 -24 C-5 -22.8 -2.5 -23.6 -0.5 -23.8 L0.5 -23 C-2.5 -22.8 -5.5 -22.4 -8.8 -23.6 Z', null);
+      line(c, '#8fa2a9', 0.65, 'M-9 -24.2 C-5 -22.9 -2.5 -23.7 -0.5 -23.8 M3.5 -23.5 L7.8 -24.1');
+      line(c, RIM, 0.55, 'M-9.4 -24.5 C-5 -23.2 -2.5 -24 -0.5 -24.1');
+      line(c, '#aa9369', 0.7, 'M-3.5 -24.6 C0.5 -25.2 2.5 -24.9 4.5 -24.4');
+      buckle(c, 2.8, -25.6, 1.6, 1.3);
+    } else {
+      // Front: iconic peaked tricorn with symmetrical curved brim flaps & centered visor peak
+      paint(c, grad(c, -6, -28.2, 6, -23, ['#586b76', '#283641', '#101c25']),
+        'M-6 -24 C-6 -26.5 -3.5 -28 0 -28 C3.5 -28 6 -26.5 6 -24 L-6 -24 Z', INK, 0.85);
+      paint(c, '#293742', 'M-5.5 -25 L-2.5 -26.6 L0 -27 L2.5 -26.6 L5.5 -25 L-5.5 -25 Z', null);
+      line(c, '#788891', 0.45, 'M-4 -26.5 L-1.5 -27.1 M1.5 -27.1 L4 -26.5');
+      line(c, RIM, 0.55, 'M-6 -26.2 C-3 -28 3 -28 6 -26.2');
+      paint(c, '#1d2a35', 'M-5.8 -24.9 L5.8 -24.9 L5.6 -23.9 L-5.6 -23.9 Z', null);
+      line(c, '#a08a5b', 0.5, 'M-5.4 -24.4 L5.4 -24.4');
+      paint(c, grad(c, -9.5, -24.5, 9.5, -22, ['#23323c', '#131e26', '#0b131b']),
+        'M-9.5 -24.6 C-5 -22.2 0 -23.6 0 -23.6 C0 -23.6 5 -22.2 9.5 -24.6 L9.8 -23.4 C6.5 -22.1 2 -22.6 0 -22.8 C-2 -22.6 -6.5 -22.1 -9.8 -23.4 Z', INK, 0.75);
+      paint(c, '#32424b', 'M-9 -24 C-5 -22.7 0 -23.2 0 -23.2 C0 -23.2 5 -22.7 9 -24 L0 -22.9 Z', null);
+      line(c, '#91a4ab', 0.65, 'M-9.2 -24.3 C-5 -22.9 -1 -23.4 0 -23.4 M1 -23.4 C5 -22.9 9.2 -24.3 9.2 -24.3');
+      line(c, RIM, 0.55, 'M-9.5 -24.6 C-5 -23.2 -1 -23.8 0 -23.8 M1 -23.8 C5 -23.2 9.5 -24.6 9.5 -24.6');
+      line(c, '#ab946b', 0.7, 'M-3.5 -24.8 C0 -25.3 3.5 -24.8 3.5 -24.8');
+      buckle(c, 2.6, -25.6, 1.6, 1.3);
+    }
   }
 
   function hem(c, side) {
@@ -343,15 +428,26 @@ window.Character = (function () {
   }
   function lantern(c) {
     // The brass cage and warm glass are baked; glow never becomes a frame gradient.
-    line(c, '#a98f5e', 0.85, 'M-2 -1 C-4 -5 4 -5 2 -1');
-    paint(c, '#372c21', 'M-3 0 L-1 -1.5 L1 -1.5 L3 0 L3.5 1 L-3.5 1 Z', INK, 0.55);
-    paint(c, grad(c, -2, 1, 2, 7, ['#ffefb0', '#f5bd63', '#a86526']),
-      'M-2.3 1 L2.3 1 L2.7 7 C1 7.8 -1 7.8 -2.7 7 Z', '#4a3627', 0.55);
-    paint(c, '#fffbd2', 'M-0.5 5.6 C-1.7 3.8 0 3.8 0.4 2 C0.2 3.8 1.8 4.6 0.4 5.6 Z', null);
-    for (const x of [-2.4, 0, 2.4]) line(c, '#8f7040', 0.55, 'M' + x + ' 1 L' + x + ' 7');
-    paint(c, '#6e5531', 'M-3 7 L3 7 L3.2 8.4 C1 9 -1 9 -3.2 8.4 Z', INK, 0.6);
-    line(c, '#f8d999', 0.5, 'M-2.2 0.4 L2 0.4 M-2.4 7.9 L2.2 7.9');
-    line(c, '#fff8d2', 0.55, 'M-1.2 2 L-1.3 5');
+    // Glass center remains local (0, 4) for exact anchors contract.
+    line(c, '#bfa46e', 0.85, 'M-2.2 -1.5 C-4.5 -6 4.5 -6 2.2 -1.5');
+    paint(c, '#2b2116', 'M-3.5 0 L-1.5 -2 L1.5 -2 L3.5 0 L4 1 L-4 1 Z', INK, 0.6);
+    paint(c, '#5c4528', 'M-2 -1.8 L2 -1.8 L2.5 -0.8 L-2.5 -0.8 Z', null);
+    line(c, BRASS_HI, 0.45, 'M-1.8 -1.2 L1.8 -1.2');
+    line(c, '#120d09', 0.5, 'M-2 -0.2 L-1.4 -0.2 M-0.4 -0.2 L0.4 -0.2 M1.4 -0.2 L2 -0.2');
+    paint(c, grad(c, -2.6, 1, 2.6, 7, ['#fff8d0', '#f7c36a', '#a66224']),
+      'M-2.5 1 L2.5 1 L2.9 7 C1.2 7.9 -1.2 7.9 -2.9 7 Z', '#4a3627', 0.55);
+    paint(c, 'rgba(255,255,255,.45)', 'M-2.2 1.2 L-1.2 1.2 L-1.5 6.6 L-2.5 6.6 Z', null);
+    paint(c, '#fffde0', 'M0 2.2 C-0.7 3.2 -0.8 4.6 0 5.4 C0.8 4.6 0.7 3.2 0 2.2 Z', null);
+    paint(c, '#fff', 'M0 3 C-0.3 3.6 -0.3 4.4 0 4.8 C0.3 4.4 0.3 3.6 0 3 Z', null);
+    line(c, '#543b1f', 0.4, 'M0 5.2 L0 6.5');
+    for (const x of [-2.6, -0.9, 0.9, 2.6]) {
+      line(c, '#7d5e32', 0.55, 'M' + x + ' 1 L' + x + ' 7');
+      line(c, BRASS_HI, 0.3, 'M' + (x + 0.15) + ' 1.2 L' + (x + 0.15) + ' 6.8');
+    }
+    paint(c, grad(c, -3.2, 7, 3.2, 9, ['#573f24', '#382715', '#1a1209']),
+      'M-3.2 7 L3.2 7 L3.4 8.6 C1.2 9.2 -1.2 9.2 -3.4 8.6 Z', INK, 0.6);
+    line(c, BRASS_HI, 0.5, 'M-2.5 0.4 L2.5 0.4 M-2.8 7.8 L2.8 7.8');
+    line(c, '#e6c888', 0.4, 'M-1.8 8.4 L1.8 8.4');
   }
   function sleeve(c, fore) {
     // Upper arm is a tapered tube with a rolled shoulder cap; forearm has a cuffroll.
@@ -417,14 +513,18 @@ window.Character = (function () {
     if (key === 'pistol') {
       paint(c, grad(c, 8, 0, 14, 8, ['#7a5638', '#4a3524']), evolved ? 'M9 1 L13 3 L11 8 L7 6 Z' : 'M11 1 L14 3 L11 7 L8 5.5 Z', '#2e241d', 0.5);
       line(c, '#a97c4d', 0.5, 'M11 3 C10 4 10 5 9 5.5');
+      line(c, '#5c3e26', 0.35, 'M8.5 4 L11.5 6.5 M9.5 3 L12.5 5.5 M8 5.5 L10 7');
       paint(c, evolved ? '#8a6a3a' : '#3f505c', 'M12 -2.5 C13 -4 17 -3 18 -2 L18 0.7 C16 2 13 1 12 0 Z', INK, 0.5);
       line(c, '#c3d0d1', 0.45, 'M13 -2.1 L17 -2 M14 -1.4 L14 0 M16 -1.4 L16 0');
       line(c, BRASS, 0.7, 'M14 2 C14 5 17 5 17 2');
       line(c, '#f5e6c2', 0.45, 'M19 -2 L23 -2');
+      paint(c, '#202a30', 'M10 -1 L9 -3 L11 -2.5 Z', INK, 0.4);
       if (evolved) {
         paint(c, '#e2c47a', 'M12 -4 L13 -6 L15 -4 Z', INK, 0.45);
         line(c, '#fbe4ac', 0.5, 'M18 -3.1 C18.5 -1 20 -2 20.5 -0.5');
         paint(c, '#6f97a6', 'M8 0 L10 -1 L11 1 L9 2 Z', '#edcf86', 0.4);
+        line(c, '#fff3c2', 0.5, 'M13 -3.5 L20 -3.5');
+        paint(c, '#88e4f8', 'M15 -1 L17 -1 L16 0.5 Z', null);
       }
     } else if (key === 'shotgun') {
       paint(c, grad(c, 0, 1, 4, 6, ['#8d6d48', '#5d442c', '#332a25']),
@@ -434,11 +534,13 @@ window.Character = (function () {
       line(c, '#0f202a', 0.6, 'M10 -0.6 L24 -0.6');
       line(c, '#dcecea', 0.55, 'M11 -2.3 L23 -2.3');
       line(c, '#bb9858', 0.7, 'M7 3 C6 6 10 6 10 3');
+      line(c, '#2d424e', 0.45, 'M12 -1.5 L23 -1.5 M14 -2 L14 -1 M18 -2 L18 -1 M21 -2 L21 -1');
       if (evolved) {
         paint(c, '#cda867', 'M9 -4 L11 -4 L11 3 L9 3 Z', INK, 0.4);
         paint(c, '#caa564', 'M20 -4 L22 -4 L22 3 L20 3 Z', INK, 0.4);
         line(c, '#f6e8bc', 0.4, 'M14 -3 L17 -3 M14 -2.2 L17 -2.2');
         paint(c, '#a87645', 'M-1 3 L1 3 L2 5 L1 6 Z', INK, 0.4);
+        line(c, '#ff9640', 0.5, 'M11 -0.5 L22 -0.5');
       }
     } else {
       paint(c, '#5d4230', 'M2 1 L7 1 L8 3 L4 5 L1 3 Z', INK, 0.45);
@@ -449,11 +551,13 @@ window.Character = (function () {
       line(c, '#dceae8', 0.55, 'M16 -1.5 L23 -1.5');
       line(c, '#101f29', 0.7, 'M18 0 L23 0');
       line(c, '#b4915a', 0.65, 'M8 3 C7 5 10 5 10 3');
+      line(c, '#64808c', 0.45, 'M3 0 L15 0');
       if (evolved) {
         paint(c, '#436c7e', 'M12 -4 L13 -6 L16 -6 L17 -3 Z', INK, 0.5);
         line(c, '#c6eaec', 0.5, 'M13 -5 L15.5 -5');
         paint(c, '#c49d58', 'M17 -3 L19 -3 L19 1.5 L17 1.5 Z', INK, 0.4);
         line(c, '#f2d898', 0.6, 'M12 7 L15 6.5');
+        line(c, '#8ce8f8', 0.5, 'M16 -2.4 L22 -2.4');
       }
     }
     // All barrels terminate exactly at 24, even though stocks differ in length.
@@ -468,6 +572,7 @@ window.Character = (function () {
     c.fillStyle = g; c.fillRect(-10, -10, 20, 20);
     paint(c, '#ffecc0', 'M-1 -1 L2 -3 L1 -1 L9 0 L2 1 L3 3 L-1 1 Z', null);
     paint(c, '#fffde7', 'M-1 -0.5 L5 0 L-1 0.5 Z', null);
+    line(c, '#ffd573', 0.45, 'M1 -2 L3 -4 M1 2 L3 4 M3 0 L7 -2 M3 0 L7 2');
   }
 
   function init() {
@@ -495,6 +600,8 @@ window.Character = (function () {
     add('idle-arm', -7, -3, 12, 20, idleArm);
     add('hat-feather', -2, -14, 10, 16, hatFeather);
     add('coat-pin', -4, -4, 8, 11, coatPin);
+    add('vial', -4, -4, 8, 12, vial);
+    add('gear-pouch', -5, -3, 10, 10, gearPouch);
     add('knee-guard', -4, -2, 8, 7, kneeGuard);
     add('heel', -4, -2, 10, 8, heel);
     for (const key of ['pistol', 'shotgun', 'repeater']) for (const variant of ['base', 'evolved'])
@@ -553,11 +660,12 @@ window.Character = (function () {
     // Being hit rocks the whole figure away from the attacker; it decays like the flash.
     const kick = motion ? clamp(p.hurtKick, 0, 1) : 0;
     const kx = clamp(p.hurtDirX, -1, 1), ky = clamp(p.hurtDirY, -1, 1);
-    const breath = motion ? Math.sin(t * 2.1) * (moving ? 0.08 : 0.22) : 0;
-    const stance = motion ? (dash ? -0.16 : clamp(vx / 300, -1, 1) * 0.085 + (moving ? Math.sin(phase) * 0.018 : 0)) : 0;
-    const crouch = motion && dash ? 1 : 0;
+    const lowHp = Number.isFinite(p.hp) && Number.isFinite(p.maxHp) && p.maxHp > 0 && (p.hp / p.maxHp < 0.28);
+    const breath = motion ? Math.sin(t * (lowHp ? 3.8 : 2.1)) * (moving ? 0.08 : (lowHp ? 0.3 : 0.22)) : 0;
+    const stance = motion ? (dash ? -0.18 : clamp(vx / 300, -1, 1) * 0.085 + (moving ? Math.sin(phase) * 0.018 : 0)) : 0;
+    const crouch = motion && dash ? 1.25 : 0;
     const brace = motion ? clamp(recoil, 0, 2.5) * 0.16 + Math.abs(stance) * 0.35 : 0;
-    const dashLean = dash ? -0.22 : 0;
+    const dashLean = dash ? -0.26 : 0;
     // Walk cycle detail: the hips lead, the shoulders counter, the knee of the forward
     // leg bends and the boot rolls from heel to toe. Four small numbers, four readable cues.
     const swing = motion && moving && !dash ? Math.sin(phase) : 0;
@@ -588,9 +696,9 @@ window.Character = (function () {
         + (Number.isFinite(p.hp) && Number.isFinite(p.maxHp) && p.maxHp > 0
           ? clamp(1 - p.hp / p.maxHp, 0, 1) * 1.9 : 0) : 0,
       shove: motion ? kick * kx * 1.5 : 0,
-      cloak: motion ? -inertia * 0.09 + Math.sin(t * 3.1 + phase * 0.3) * 0.018 + (dash ? -0.22 : 0) - kick * kx * 0.1 : 0,
-      scarf: motion ? Math.sin(t * 3.7 + 0.7) * 0.035 - inertia * 0.08 : 0,
-      lantern: motion ? Math.sin(t * 2.4 + phase * 0.35) * 0.025 - inertia * 0.055 - kick * kx * 0.16 : 0,
+      cloak: motion ? -inertia * 0.09 + Math.sin(t * 3.1 + phase * 0.3) * 0.018 + (dash ? -0.32 : 0) - kick * kx * 0.1 : 0,
+      scarf: motion ? Math.sin(t * 3.7 + 0.7) * 0.035 - inertia * 0.08 + (dash ? -0.26 : 0) : 0,
+      lantern: motion ? Math.sin(t * 2.4 + phase * 0.35) * 0.025 - inertia * 0.055 - kick * kx * 0.16 + (dash ? -0.22 : 0) : 0,
       wrist: motion && recoil ? -recoil * 0.055 : 0, recoil,
       dash: motion && dash,
       muzzle: motion ? clamp(p.muzzle / 0.12, 0, 1) : 0,
@@ -678,6 +786,8 @@ window.Character = (function () {
       // Shoulders counter-rotate against the hips, which is what makes a walk read as a walk.
       joint(ctx, 'torso-' + q.frame, source, q.twist, q.breath, q.stance * 0.3);
       joint(ctx, 'coat-pin', source, q.twist, q.breath - 2, q.stance * 0.3);
+      joint(ctx, 'vial', source, 4.8 + q.twist * 0.4, 5.5 + q.breath, q.stance * 0.2 + q.cloak * 0.2);
+      joint(ctx, 'gear-pouch', source, -5.2 + q.twist * 0.4, 5 + q.breath, -q.stance * 0.15 + q.cloak * 0.15);
       joint(ctx, 'idle-arm', source, -9 + q.twist * 0.4, -4 + q.breath, q.lantern * 0.65 + q.armSwing);
       joint(ctx, 'lantern', source, -10, 10 + q.breath, q.lantern);
       // Asymmetric cape lies on the left shoulder, not as a round blanket over the chest.

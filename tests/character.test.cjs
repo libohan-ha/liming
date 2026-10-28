@@ -133,20 +133,23 @@ test('pose chooses eight directions, remains pure, and articulates alternating b
 
 test('new ranger silhouette parts and stance animation remain visible at normal scale', () => {
   const { character: c } = load(); const a = c.init();
-  for (const name of ['hat-feather', 'coat-pin', 'knee-guard', 'heel']) {
+  for (const name of ['hat-feather', 'coat-pin', 'vial', 'gear-pouch', 'knee-guard', 'heel']) {
     assert.ok(a.parts[name], name + ' is a distinct cached silhouette part');
   }
   const idleA = c.pose(player({ vx: 0, vy: 0 }), 0);
   const idleB = c.pose(player({ vx: 0, vy: 0 }), Math.PI / 2);
   const moving = c.pose(player({ vx: 180, vy: 40 }), 1.2);
   const dash = c.pose(player({ dashT: 0.16, dashDirX: 1, dashDirY: 0 }), 1.2);
+  const lowHpPose = c.pose(player({ hp: 10, maxHp: 100, vx: 0, vy: 0 }), 1.0);
+  const normalPose = c.pose(player({ hp: 100, maxHp: 100, vx: 0, vy: 0 }), 1.0);
+  assert.notEqual(lowHpPose.breath, normalPose.breath, 'low health quickens respiration');
   assert.notEqual(idleA.breath, idleB.breath, 'breathing changes the resting silhouette');
   assert.ok(Math.abs(moving.stance) > 0, 'moving stance separates shoulders from hips');
   assert.ok(dash.crouch > 0 && dash.stance < 0, 'dash lowers and commits the body');
   assert.ok(Math.abs(moving.brace) > 0, 'weapon brace follows the moving stance');
   const r = recorder(); c.draw(r.ctx, player({ vx: 180, vy: 40 }), 1.2);
   const draws = sprites(r);
-  for (const name of ['hat-feather', 'coat-pin', 'knee-guard', 'heel']) {
+  for (const name of ['hat-feather', 'coat-pin', 'vial', 'gear-pouch', 'knee-guard', 'heel']) {
     const part = a.parts[name];
     assert.ok(draws.some(d => d.args[0] === a.canvas && d.args[1] === part.x * 3 && d.args[2] === part.y * 3), name + ' is composited in the figure');
   }
